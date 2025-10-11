@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const [showMFA, setShowMFA] = useState(false);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [mfaMethod, setMfaMethod] = useState<"totp" | "sms">("totp");
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
@@ -24,9 +24,46 @@ const LoginForm = () => {
   const [otpCode, setOtpCode] = useState("");
   const { toast } = useToast();
 
+  const steps = [
+    {
+      id: 1,
+      title: "Unit Credentials",
+      description: "Identify yourself"
+    },
+    {
+      id: 2,
+      title: "Security Check",
+      description: "Password & network"
+    },
+    {
+      id: 3,
+      title: "MFA",
+      description: "Authenticate"
+    }
+  ];
+
+  const handleCredentialsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!userType || !serviceId) {
+      toast({
+        title: "Missing Information",
+        description: "Select your user type and provide your Service ID to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Credentials Recorded",
+      description: "Proceed to secure authentication.",
+    });
+    setCurrentStep(2);
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!userType || !serviceId || !password) {
       toast({
         title: "Missing Information",
@@ -40,7 +77,7 @@ const LoginForm = () => {
     const loginSuccess = Math.random() > 0.3; // 70% success rate for demo
     
     if (loginSuccess) {
-      setShowMFA(true);
+      setCurrentStep(3);
       toast({
         title: "Credentials Verified",
         description: "Please complete MFA authentication.",
@@ -68,7 +105,7 @@ const LoginForm = () => {
 
   const handleMFAVerify = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (otpCode.length === 6) {
       toast({
         title: "Authentication Successful",
@@ -119,7 +156,7 @@ const LoginForm = () => {
     );
   }
 
-  if (showMFA) {
+  if (currentStep === 3) {
     return (
       <div className="space-y-6">
         <div>
@@ -202,9 +239,36 @@ const LoginForm = () => {
   return (
     <>
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Sign in to Defence Cyber Portal</h2>
-          <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Enter your credentials to access your account</p>
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Sign in to Defence Cyber Portal</h2>
+            <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Complete the secure login steps</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {steps.map((step) => (
+              <div key={step.id} className="flex-1 flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${
+                  currentStep >= step.id
+                    ? "bg-gradient-to-br from-[hsl(207,90%,54%)] to-[hsl(213,100%,18%)] text-white"
+                    : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
+                }`}>
+                  {step.id}
+                </div>
+                <div className="hidden md:block">
+                  <p className="text-xs font-semibold text-[hsl(213,100%,18%)]">
+                    {step.title}
+                  </p>
+                  <p className="text-[10px] text-[hsl(0,0%,31%)]">
+                    {step.description}
+                  </p>
+                </div>
+                {step.id !== steps.length && (
+                  <div className={`flex-1 h-0.5 rounded ${currentStep > step.id ? "bg-[hsl(207,90%,54%)]" : "bg-[hsl(213,100%,18%)]/10"}`} />
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         {failedAttempts > 0 && failedAttempts < 3 && (
@@ -216,75 +280,96 @@ const LoginForm = () => {
           </Alert>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+        {currentStep === 1 && (
+          <form onSubmit={handleCredentialsSubmit} className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="userType">User Type *</Label>
+                <Select value={userType} onValueChange={setUserType}>
+                  <SelectTrigger id="userType">
+                    <SelectValue placeholder="Select Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="personnel">Defence Personnel</SelectItem>
+                    <SelectItem value="family">Family Member</SelectItem>
+                    <SelectItem value="veteran">Veteran</SelectItem>
+                    <SelectItem value="cert">CERT Analyst</SelectItem>
+                    <SelectItem value="commander">Commander</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                    <SelectItem value="auditor">Auditor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="serviceId">Service ID *</Label>
+                <Input
+                  id="serviceId"
+                  type="text"
+                  placeholder="Enter Service ID"
+                  value={serviceId}
+                  onChange={(e) => setServiceId(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full" size="lg">
+              Continue to Security Check
+            </Button>
+          </form>
+        )}
+
+        {currentStep === 2 && (
+          <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="userType">User Type *</Label>
-              <Select value={userType} onValueChange={setUserType}>
-                <SelectTrigger id="userType">
-                  <SelectValue placeholder="Select Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="personnel">Defence Personnel</SelectItem>
-                  <SelectItem value="family">Family Member</SelectItem>
-                  <SelectItem value="veteran">Veteran</SelectItem>
-                  <SelectItem value="cert">CERT Analyst</SelectItem>
-                  <SelectItem value="commander">Commander</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
-                  <SelectItem value="auditor">Auditor</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="password">Password *</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(0,0%,31%)] hover:text-[hsl(213,100%,18%)] transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="serviceId">Service ID *</Label>
-              <Input
-                id="serviceId"
-                type="text"
-                placeholder="Enter Service ID"
-                value={serviceId}
-                onChange={(e) => setServiceId(e.target.value)}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>
+                Back
+              </Button>
+              <Button type="submit" className="w-full" size="lg">
+                Verify & Proceed to MFA
+              </Button>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password *</Label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(0,0%,31%)] hover:text-[hsl(213,100%,18%)] transition-colors"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowSSOModal(true)}
+            >
+              Sign in via Defence SSO
+            </Button>
+
+            <div className="text-center">
+              <Button variant="link" size="sm">
+                Forgot password?
+              </Button>
             </div>
-          </div>
-
-          <Button type="submit" className="w-full" size="lg">
-            Sign In
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={() => setShowSSOModal(true)}
-          >
-            Sign in via Defence SSO
-          </Button>
-        </form>
+          </form>
+        )}
 
         <div className="text-center pt-2">
-          <Button variant="link" size="sm">
-            Forgot password?
+          <Button variant="link" size="sm" onClick={() => setShowVPNModal(true)}>
+            Network verification help
           </Button>
         </div>
       </div>
