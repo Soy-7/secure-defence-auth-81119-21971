@@ -115,13 +115,13 @@ const LoginForm = () => {
   const steps = [
     {
       id: 1,
-      title: "Unit Credentials",
+      title: "Credentials",
       description: "Identify yourself"
     },
     {
       id: 2,
-      title: "Security Check",
-      description: "Password & network"
+      title: "Security",
+      description: "Verify password"
     },
     {
       id: 3,
@@ -297,7 +297,7 @@ const LoginForm = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Account Locked</h2>
-          <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Security measure activated</p>
+          <p className="text-sm text-[hsl(0,0%,45%)] mt-1">Security measure activated</p>
         </div>
 
         <Alert variant="destructive">
@@ -330,7 +330,7 @@ const LoginForm = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Multi-Factor Authentication</h2>
-          <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Secure your access with MFA</p>
+          <p className="text-sm text-[hsl(0,0%,45%)] mt-1">Secure your access with MFA</p>
         </div>
 
         <Alert>
@@ -473,31 +473,32 @@ const LoginForm = () => {
   } else {
     pageContent = (
       <div className="space-y-6">
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div>
-            <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Sign in to Defence Cyber Portal</h2>
-            <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Complete the secure login steps</p>
+            <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Welcome Back</h2>
+            <p className="text-sm text-[hsl(0,0%,45%)] mt-1">Sign in to Defence Cyber Portal</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {steps.map((step) => (
-              <div key={step.id} className="flex-1 flex items-center gap-3">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${
-                    currentStep >= step.id
-                      ? "bg-gradient-to-br from-[hsl(207,90%,54%)] to-[hsl(213,100%,18%)] text-white"
-                      : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
-                  }`}
-                >
-                  {step.id}
-                </div>
-                <div className="hidden md:block">
-                  <p className="text-xs font-semibold text-[hsl(213,100%,18%)]">{step.title}</p>
-                  <p className="text-[10px] text-[hsl(0,0%,31%)]">{step.description}</p>
-                </div>
-                {step.id !== steps.length && (
+          <div className="flex items-center gap-2">
+            {steps.map((step, index) => (
+              <div key={step.id} className="flex-1 flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <div
-                    className={`flex-1 h-0.5 rounded ${
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                      currentStep >= step.id
+                        ? "bg-[hsl(207,90%,54%)] text-white shadow-sm"
+                        : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]/60"
+                    }`}
+                  >
+                    {step.id}
+                  </div>
+                  <div className="hidden sm:block min-w-0">
+                    <p className="text-xs font-medium text-[hsl(213,100%,18%)] truncate">{step.title}</p>
+                  </div>
+                </div>
+                {index < steps.length - 1 && (
+                  <div
+                    className={`flex-1 h-0.5 rounded transition-all ${
                       currentStep > step.id
                         ? "bg-[hsl(207,90%,54%)]"
                         : "bg-[hsl(213,100%,18%)]/10"
@@ -519,7 +520,7 @@ const LoginForm = () => {
         )}
 
         {currentStep === 1 && (
-          <form onSubmit={handleCredentialsSubmit} className="space-y-5">
+          <form onSubmit={handleCredentialsSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -592,14 +593,14 @@ const LoginForm = () => {
               </div>
             )}
 
-            <Button type="submit" className="w-full" size="lg">
-              Continue to Security Check
+            <Button type="submit" className="w-full mt-6" size="lg">
+              Continue
             </Button>
           </form>
         )}
 
         {currentStep === 2 && (
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">Password *</Label>
               <div className="relative">
@@ -634,34 +635,44 @@ const LoginForm = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} size="lg">
                 Back
               </Button>
-              <Button type="submit" className="w-full" size="lg">
-                Verify & Proceed to MFA
+              <Button type="submit" size="lg">
+                Continue
               </Button>
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setShowSSOModal(true)}
-            >
-              Sign in via Defence SSO
-            </Button>
+            <div className="pt-4 space-y-3">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-[hsl(213,100%,18%)]/10"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-gradient-to-br from-white to-[hsl(210,40%,98%)] px-2 text-[hsl(0,0%,45%)]">Or</span>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowSSOModal(true)}
+              >
+                Sign in via Defence SSO
+              </Button>
+            </div>
 
-            <div className="text-center">
-              <Button variant="link" size="sm">
+            <div className="text-center pt-2">
+              <Button variant="link" size="sm" className="text-[hsl(207,90%,54%)]">
                 Forgot password?
               </Button>
             </div>
           </form>
         )}
 
-        <div className="text-center pt-2">
-          <Button variant="link" size="sm" onClick={() => setShowVPNModal(true)}>
+        <div className="text-center">
+          <Button variant="link" size="sm" onClick={() => setShowVPNModal(true)} className="text-[hsl(0,0%,45%)] hover:text-[hsl(207,90%,54%)]">
             Network verification help
           </Button>
         </div>

@@ -29,10 +29,10 @@ const RegisterForm = () => {
   const { toast } = useToast();
 
   const steps = [
-    { id: 1, title: "Identity", description: "Who are you?" },
-    { id: 2, title: "Service", description: "Defence credentials" },
-    { id: 3, title: "Security", description: "MFA & consent" },
-    { id: 4, title: "Activate", description: "Secure account" },
+    { id: 1, title: "Identity", description: "Basic info" },
+    { id: 2, title: "Service", description: "Credentials" },
+    { id: 3, title: "Security", description: "MFA setup" },
+    { id: 4, title: "Activate", description: "Complete" },
   ];
 
   const currentRoleConfig = useMemo<RoleConfig | undefined>(
@@ -282,13 +282,13 @@ const RegisterForm = () => {
 
   if (isSubmitted && !isVerified && !emailError) {
     return (
-      <div className="space-y-6 text-center py-8">
+      <div className="space-y-6 text-center py-12">
         <div className="flex justify-center">
-          <div className="w-16 h-16 border-4 border-[hsl(213,100%,18%)] border-t-transparent rounded-full animate-spin" />
+          <div className="w-16 h-16 border-4 border-[hsl(207,90%,54%)] border-t-transparent rounded-full animate-spin" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Verification in Progress</h2>
-          <p className="text-sm text-[hsl(0,0%,31%)] mt-2">
+          <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Verifying Credentials</h2>
+          <p className="text-sm text-[hsl(0,0%,45%)] mt-1">
             Validating your credentials with Defence systems...
           </p>
         </div>
@@ -301,7 +301,7 @@ const RegisterForm = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Manual Review Required</h2>
-          <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Your registration is pending verification</p>
+          <p className="text-sm text-[hsl(0,0%,45%)] mt-1">Your registration is pending verification</p>
         </div>
 
         <Alert>
@@ -338,7 +338,7 @@ const RegisterForm = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Set Up Multi-Factor Authentication</h2>
-          <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Secure your account with MFA</p>
+          <p className="text-sm text-[hsl(0,0%,45%)] mt-1">Secure your account with MFA</p>
         </div>
 
         <Alert>
@@ -412,32 +412,31 @@ const RegisterForm = () => {
   return (
     <TooltipProvider>
       <div className="space-y-6">
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Register for Access</h2>
-          <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Follow the guided onboarding steps</p>
+          <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Create Account</h2>
+          <p className="text-sm text-[hsl(0,0%,45%)] mt-1">Register for Defence Cyber Portal</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {steps.map((step) => (
-            <div key={step.id} className="flex-1 flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${
-                currentStep >= step.id
-                  ? "bg-gradient-to-br from-[hsl(207,90%,54%)] to-[hsl(213,100%,18%)] text-white"
-                  : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
-              }`}>
-                {step.id}
+        <div className="flex items-center gap-2">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex-1 flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                  currentStep >= step.id
+                    ? "bg-[hsl(207,90%,54%)] text-white shadow-sm"
+                    : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]/60"
+                }`}>
+                  {step.id}
+                </div>
+                <div className="hidden sm:block min-w-0">
+                  <p className="text-xs font-medium text-[hsl(213,100%,18%)] truncate">
+                    {step.title}
+                  </p>
+                </div>
               </div>
-              <div className="hidden md:block">
-                <p className="text-xs font-semibold text-[hsl(213,100%,18%)]">
-                  {step.title}
-                </p>
-                <p className="text-[10px] text-[hsl(0,0%,31%)]">
-                  {step.description}
-                </p>
-              </div>
-              {step.id !== steps.length && (
-                <div className={`flex-1 h-0.5 rounded ${currentStep > step.id ? "bg-[hsl(207,90%,54%)]" : "bg-[hsl(213,100%,18%)]/10"}`} />
+              {index < steps.length - 1 && (
+                <div className={`flex-1 h-0.5 rounded transition-all ${currentStep > step.id ? "bg-[hsl(207,90%,54%)]" : "bg-[hsl(213,100%,18%)]/10"}`} />
               )}
             </div>
           ))}
@@ -445,7 +444,7 @@ const RegisterForm = () => {
       </div>
 
       {currentStep === 1 && (
-        <form onSubmit={handleIdentityStep} className="space-y-5">
+        <form onSubmit={handleIdentityStep} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="fullName">Full Name *</Label>
@@ -491,14 +490,14 @@ const RegisterForm = () => {
             ) : null}
           </div>
 
-          <Button type="submit" className="w-full" size="lg">
-            Continue to Service Details
+          <Button type="submit" className="w-full mt-6" size="lg">
+            Continue
           </Button>
         </form>
       )}
 
       {currentStep === 2 && (
-        <form onSubmit={handleServiceStep} className="space-y-5">
+        <form onSubmit={handleServiceStep} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="userType">Select Your Role *</Label>
@@ -579,19 +578,19 @@ const RegisterForm = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-            <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} size="lg">
               Back
             </Button>
-            <Button type="submit" className="w-full" size="lg">
-              Continue to Security Preferences
+            <Button type="submit" size="lg">
+              Continue
             </Button>
           </div>
         </form>
       )}
 
       {currentStep === 3 && (
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Preferred MFA Method *</Label>
             <div className="space-y-2">
@@ -666,12 +665,12 @@ const RegisterForm = () => {
             </Label>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Button type="button" variant="outline" onClick={() => setCurrentStep(2)}>
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <Button type="button" variant="outline" onClick={() => setCurrentStep(2)} size="lg">
               Back
             </Button>
-            <Button type="submit" className="w-full" size="lg">
-              Submit for Verification
+            <Button type="submit" size="lg">
+              Submit
             </Button>
           </div>
         </form>
