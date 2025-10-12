@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { roleConfigurations, roleOptions, RoleConfig, RoleKey } from "@/lib/roleConfig";
+
+const BASE_PASSWORD_POLICY = "Minimum 12 characters, at least one uppercase letter, one number, and one special character.";
+const PASSWORD_POLICY_REGEX = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}$/;
 
 const formatCountdown = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -61,8 +64,8 @@ const LoginForm = () => {
     setUserType(roleKey);
     setServiceId("");
     setServiceIdError("");
-  setEmail("");
-  setEmailError("");
+    setEmail("");
+    setEmailError("");
     setPasswordError("");
     setPhoneNumber("");
     setPhoneError("");
@@ -251,6 +254,27 @@ const LoginForm = () => {
     currentRoleConfig?.requiresDefenceEmail || currentRoleConfig?.inputType === "email"
   );
   const showServiceIdField = currentRoleConfig?.inputType !== "email";
+  const minRequiredPasswordLength = useMemo(
+    () => Math.max(12, currentRoleConfig?.passwordPolicy?.minLength ?? 12),
+    [currentRoleConfig?.passwordPolicy?.minLength]
+  );
+
+  const baselinePasswordMessage = useMemo(
+    () =>
+      minRequiredPasswordLength > 12
+        ? `Minimum ${minRequiredPasswordLength} characters, at least one uppercase letter, one number, and one special character.`
+        : BASE_PASSWORD_POLICY,
+    [minRequiredPasswordLength]
+  );
+
+  const passwordPolicyMessages = useMemo(() => {
+    const messages = new Set<string>([baselinePasswordMessage]);
+    const customMessage = currentRoleConfig?.passwordPolicy?.message;
+    if (customMessage && customMessage !== baselinePasswordMessage) {
+      messages.add(customMessage);
+    }
+    return Array.from(messages);
+  }, [baselinePasswordMessage, currentRoleConfig?.passwordPolicy?.message]);
 
   const handleCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -357,6 +381,16 @@ const LoginForm = () => {
         });
         return;
       }
+    }
+
+    if (!PASSWORD_POLICY_REGEX.test(password)) {
+      setPasswordError(baselinePasswordMessage);
+      toast({
+        title: "Password Policy Enforcement",
+        description: baselinePasswordMessage,
+        variant: "destructive",
+      });
+      return;
     }
 
     if (config.passwordPolicy) {
@@ -854,11 +888,12 @@ const LoginForm = () => {
               </div>
               {passwordError ? (
                 <p className="text-xs text-[hsl(0,84%,60%)]">{passwordError}</p>
-              ) : currentRoleConfig?.passwordPolicy ? (
-                <p className="text-xs text-[hsl(0,0%,45%)]">
-                  {currentRoleConfig.passwordPolicy.message}
-                </p>
               ) : null}
+              <ul className="text-xs text-[hsl(0,0%,45%)] list-disc list-inside space-y-1">
+                {passwordPolicyMessages.map((policy) => (
+                  <li key={policy}>{policy}</li>
+                ))}
+              </ul>
             </div>
 
             {currentRoleConfig?.requiresMfa && (

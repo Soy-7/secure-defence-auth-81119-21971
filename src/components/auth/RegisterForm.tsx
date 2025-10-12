@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,14 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { roleConfigurations, roleOptions, RoleKey, RoleConfig, defenceEmailPattern } from "@/lib/roleConfig";
 
+const BASE_PASSWORD_POLICY = "Minimum 12 characters, at least one uppercase letter, one number, and one special character.";
+const PASSWORD_POLICY_REGEX = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}$/;
+const formatCountdown = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+};
+
 const RegisterForm = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -20,6 +28,13 @@ const RegisterForm = () => {
   const [unit, setUnit] = useState("");
   const [mfaMethod, setMfaMethod] = useState<"totp" | "sms">("totp");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [activationPassword, setActivationPassword] = useState("");
+  const [activationPasswordError, setActivationPasswordError] = useState("");
+  const [smsOtp, setSmsOtp] = useState("");
+  const [smsOtpError, setSmsOtpError] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const otpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
@@ -51,6 +66,69 @@ const RegisterForm = () => {
         : [],
     [currentRoleConfig]
   );
+
+  const minRequiredPasswordLength = useMemo(
+    () => Math.max(12, currentRoleConfig?.passwordPolicy?.minLength ?? 12),
+    [currentRoleConfig?.passwordPolicy?.minLength]
+  );
+
+  const baselinePasswordMessage = useMemo(
+    () =>
+      minRequiredPasswordLength > 12
+        ? `Minimum ${minRequiredPasswordLength} characters, at least one uppercase letter, one number, and one special character.`
+        : BASE_PASSWORD_POLICY,
+    [minRequiredPasswordLength]
+  );
+
+  const passwordPolicyMessages = useMemo(() => {
+    const messages = new Set<string>([baselinePasswordMessage]);
+    const customMessage = currentRoleConfig?.passwordPolicy?.message;
+    if (customMessage && customMessage !== baselinePasswordMessage) {
+      messages.add(customMessage);
+    }
+    return Array.from(messages);
+  }, [baselinePasswordMessage, currentRoleConfig?.passwordPolicy?.message]);
+
+  const clearOtpTimer = () => {
+    if (otpTimerRef.current) {
+      clearInterval(otpTimerRef.current);
+      otpTimerRef.current = null;
+    }
+  };
+
+  const startOtpCountdown = () => {
+    clearOtpTimer();
+    setOtpCountdown(60);
+    otpTimerRef.current = setInterval(() => {
+      setOtpCountdown((prev) => {
+        if (prev <= 1) {
+          clearOtpTimer();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendOtp = () => {
+    if (!mobile || mobile.length < 10) {
+      toast({
+        title: "Update Mobile Number",
+        description: "Enter a valid mobile number in Step 1 so we can deliver the OTP.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSmsOtp("");
+    setSmsOtpError("");
+    setOtpSent(true);
+    startOtpCountdown();
+    toast({
+      title: "OTP Sent",
+      description: `A one-time code has been dispatched to ***-***-${mobile.slice(-4)}.`,
+    });
+  };
 
   const computeNormalizedId = (value: string, config?: RoleConfig) => {
     if (!config) {
@@ -118,6 +196,13 @@ const RegisterForm = () => {
     setUserType(roleKey);
     setServiceId("");
     setServiceIdError("");
+    setActivationPassword("");
+    setActivationPasswordError("");
+  setSmsOtp("");
+  setSmsOtpError("");
+  clearOtpTimer();
+  setOtpSent(false);
+  setOtpCountdown(0);
     evaluateEmailAgainstRole(roleConfigurations[roleKey], undefined, roleKey);
     const enforcedMethod = roleConfigurations[roleKey]?.enforcedMfaMethod;
     setMfaMethod(enforcedMethod ?? "totp");
@@ -138,6 +223,33 @@ const RegisterForm = () => {
     }
 
     setMfaMethod(value === "sms" ? "sms" : "totp");
+    if (value === "sms") {
+      setSmsOtp("");
+      setSmsOtpError("");
+      setOtpSent(false);
+      setOtpCountdown(0);
+    } else {
+      setSmsOtp("");
+      setSmsOtpError("");
+      clearOtpTimer();
+      setOtpSent(false);
+      setOtpCountdown(0);
+    }
+  };
+
+  const handleActivationPasswordChange = (value: string) => {
+    setActivationPassword(value);
+    if (activationPasswordError) {
+      validateActivationPassword(value, currentRoleConfig);
+    }
+  };
+
+  const handleSmsOtpChange = (rawValue: string) => {
+    const cleaned = rawValue.replace(/\D/g, "").slice(0, 6);
+    setSmsOtp(cleaned);
+    if (smsOtpError) {
+      setSmsOtpError("");
+    }
   };
 
   const validateServiceId = (value: string, config: RoleConfig) => {
@@ -169,11 +281,54 @@ const RegisterForm = () => {
     return null;
   };
 
+  const validateActivationPassword = (value: string, config?: RoleConfig) => {
+    const candidate = value;
+
+    if (!candidate.trim()) {
+      const message = "Create a password that meets the listed policy.";
+      setActivationPasswordError(message);
+      return message;
+    }
+
+    if (!PASSWORD_POLICY_REGEX.test(candidate)) {
+      setActivationPasswordError(baselinePasswordMessage);
+      return baselinePasswordMessage;
+    }
+
+    const minLength = Math.max(12, config?.passwordPolicy?.minLength ?? minRequiredPasswordLength);
+    if (candidate.length < minLength) {
+      const message =
+        config?.passwordPolicy?.message ??
+        `Password must be at least ${minLength} characters and include uppercase letters, numbers, and special characters.`;
+      setActivationPasswordError(message);
+      return message;
+    }
+
+    if (config?.passwordPolicy?.requireSpecialCharacter && !/[^A-Za-z0-9]/.test(candidate)) {
+      const message = config.passwordPolicy.message ?? "Include at least one special character in your password.";
+      setActivationPasswordError(message);
+      return message;
+    }
+
+    setActivationPasswordError("");
+    return null;
+  };
+
   useEffect(() => {
     if (currentRoleConfig?.enforcedMfaMethod && mfaMethod !== currentRoleConfig.enforcedMfaMethod) {
       setMfaMethod(currentRoleConfig.enforcedMfaMethod);
     }
   }, [currentRoleConfig?.enforcedMfaMethod, mfaMethod]);
+
+  useEffect(() => {
+    if (!showMFASetup || mfaMethod !== "sms") {
+      clearOtpTimer();
+      setOtpSent(false);
+      setOtpCountdown(0);
+    }
+  }, [showMFASetup, mfaMethod]);
+
+  useEffect(() => () => clearOtpTimer(), []);
 
   const handleIdentityStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,6 +403,25 @@ const RegisterForm = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!currentRoleConfig) {
+      toast({
+        title: "Select Your Role",
+        description: "Choose a role and complete earlier steps before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const passwordMessage = validateActivationPassword(activationPassword, currentRoleConfig);
+    if (passwordMessage) {
+      toast({
+        title: "Update Password",
+        description: passwordMessage,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!agreedToTerms) {
       toast({
         title: "Accept Terms",
@@ -278,6 +452,53 @@ const RegisterForm = () => {
         });
       }
     }, 2500);
+  };
+
+  const handleCompleteMfaSetup = () => {
+    if (mfaMethod === "sms") {
+      if (!otpSent) {
+        const message = "Send the OTP to your device before completing setup.";
+        setSmsOtpError(message);
+        toast({
+          title: "Send OTP",
+          description: message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (otpCountdown === 0) {
+        const message = "Your OTP expired. Resend a new code to continue.";
+        setSmsOtpError(message);
+        toast({
+          title: "OTP Expired",
+          description: message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (smsOtp.length !== 6) {
+        const message = "Enter the 6-digit code we just sent to your mobile number.";
+        setSmsOtpError(message);
+        toast({
+          title: "Verify SMS Code",
+          description: message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    clearOtpTimer();
+    setSmsOtp("");
+    setSmsOtpError("");
+    setOtpSent(false);
+    setOtpCountdown(0);
+    toast({
+      title: "MFA Setup Complete",
+      description: "Your account is now secure. Redirecting to login...",
+    });
   };
 
   if (isSubmitted && !isVerified && !emailError) {
@@ -394,15 +615,56 @@ const RegisterForm = () => {
             <p className="text-sm text-[hsl(0,0%,31%)]">
               You'll receive an SMS code every time you log in. Standard SMS charges may apply.
             </p>
+            <div className="space-y-2">
+              <Label htmlFor="smsOtpSetup">Enter Verification Code</Label>
+              <Input
+                id="smsOtpSetup"
+                type="text"
+                inputMode="numeric"
+                pattern="\d*"
+                maxLength={6}
+                value={smsOtp}
+                onChange={(e) => handleSmsOtpChange(e.target.value)}
+                className="text-center text-2xl tracking-widest"
+                aria-invalid={Boolean(smsOtpError)}
+              />
+              {smsOtpError ? (
+                <p className="text-xs text-[hsl(0,84%,60%)]">{smsOtpError}</p>
+              ) : (
+                <p className="text-xs text-[hsl(0,0%,45%)]">Enter the OTP to confirm your mobile device.</p>
+              )}
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSendOtp}
+                    disabled={otpCountdown > 0}
+                  >
+                    {otpSent
+                      ? otpCountdown > 0
+                        ? `Resend in ${formatCountdown(otpCountdown)}`
+                        : "Resend OTP"
+                      : "Send OTP"}
+                  </Button>
+                  {otpSent && (
+                    <p
+                      className={`text-xs ${
+                        otpCountdown > 0
+                          ? "text-[hsl(122,39%,49%)]"
+                          : "text-[hsl(0,84%,60%)]"
+                      }`}
+                    >
+                      {otpCountdown > 0
+                        ? `OTP sent to ***-***-${mobile.slice(-4)}. Valid for ${formatCountdown(otpCountdown)}.`
+                        : "OTP expired. Tap resend to request a new code."}
+                    </p>
+                  )}
+                </div>
+            </div>
           </div>
         )}
 
-        <Button className="w-full" size="lg" onClick={() => {
-          toast({
-            title: "MFA Setup Complete",
-            description: "Your account is now secure. Redirecting to login...",
-          });
-        }}>
+        <Button className="w-full" size="lg" onClick={handleCompleteMfaSetup}>
           Complete Setup & Continue
         </Button>
       </div>
@@ -594,44 +856,100 @@ const RegisterForm = () => {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <Label>Preferred MFA Method *</Label>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  id="totp"
-                  name="mfa"
-                  value="totp"
-                  checked={mfaMethod === "totp"}
-                  onChange={(e) => handleMfaMethodChange(e.target.value)}
-                  className="rounded-full"
-                />
-                <Label htmlFor="totp" className="font-normal cursor-pointer flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
-                  TOTP Authenticator App (Recommended)
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  id="sms"
-                  name="mfa"
-                  value="sms"
-                  checked={mfaMethod === "sms"}
-                  onChange={(e) => handleMfaMethodChange(e.target.value)}
-                  disabled={currentRoleConfig?.enforcedMfaMethod === "totp"}
-                  className="rounded-full"
-                />
-                <Label htmlFor="sms" className="font-normal cursor-pointer flex items-center gap-2">
-                  <Smartphone className="w-4 h-4" />
-                  SMS OTP (Fallback)
-                </Label>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label="Select MFA method">
+              <button
+                type="button"
+                onClick={() => handleMfaMethodChange("totp")}
+                className={`rounded-lg border p-4 text-left transition shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(213,100%,18%)] ${
+                  mfaMethod === "totp"
+                    ? "border-[hsl(213,100%,18%)] bg-[hsl(210,40%,96.1%)]"
+                    : "border-[hsl(213,100%,18%)]/20 bg-white"
+                }`}
+                role="radio"
+                aria-checked={mfaMethod === "totp"}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      mfaMethod === "totp"
+                        ? "bg-[hsl(213,100%,18%)] text-white"
+                        : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
+                    }`}
+                  >
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-[hsl(213,100%,18%)]">Authenticator App</p>
+                    <p className="text-xs text-[hsl(0,0%,45%)]">Use time-based codes from your authenticator.</p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleMfaMethodChange("sms")}
+                className={`rounded-lg border p-4 text-left transition shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(213,100%,18%)] ${
+                  mfaMethod === "sms"
+                    ? "border-[hsl(213,100%,18%)] bg-[hsl(210,40%,96.1%)]"
+                    : "border-[hsl(213,100%,18%)]/20 bg-white"
+                } ${currentRoleConfig?.enforcedMfaMethod === "totp" ? "opacity-60 cursor-not-allowed" : "hover:shadow-md"}`}
+                role="radio"
+                aria-checked={mfaMethod === "sms"}
+                aria-disabled={currentRoleConfig?.enforcedMfaMethod === "totp"}
+                disabled={currentRoleConfig?.enforcedMfaMethod === "totp"}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      mfaMethod === "sms"
+                        ? "bg-[hsl(213,100%,18%)] text-white"
+                        : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
+                    }`}
+                  >
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-[hsl(213,100%,18%)]">SMS OTP</p>
+                    <p className="text-xs text-[hsl(0,0%,45%)]">Receive one-time codes on your registered device.</p>
+                  </div>
+                </div>
+              </button>
             </div>
             <p className="text-xs text-[hsl(0,0%,31%)]">
               {currentRoleConfig?.enforcedMfaMethod === "totp"
                 ? "Authenticator-based MFA is enforced for this role."
                 : "TOTP offers higher security and works offline"}
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="activationPassword">Create Portal Password *</Label>
+            <Input
+              id="activationPassword"
+              type="password"
+              placeholder="Create a secure password"
+              value={activationPassword}
+              onChange={(e) => handleActivationPasswordChange(e.target.value)}
+              autoComplete="new-password"
+              aria-invalid={Boolean(activationPasswordError)}
+            />
+            {activationPasswordError ? (
+              <p className="text-xs text-[hsl(0,84%,60%)]">{activationPasswordError}</p>
+            ) : (
+              <p className="text-xs text-[hsl(0,0%,31%)]">Must satisfy the requirements below.</p>
+            )}
+          </div>
+
+          <div className="bg-[hsl(210,40%,96.1%)] border border-[hsl(213,100%,18%)]/15 rounded-lg p-4 space-y-2">
+            <p className="text-sm font-semibold text-[hsl(213,100%,18%)]">Password policy</p>
+            <p className="text-xs text-[hsl(0,0%,31%)]">
+              You will create your portal password during activation. Prepare one that complies with:
+            </p>
+            <ul className="text-xs text-[hsl(0,0%,31%)] list-disc list-inside space-y-1">
+              {passwordPolicyMessages.map((policy) => (
+                <li key={policy}>{policy}</li>
+              ))}
+            </ul>
           </div>
 
           <Collapsible>
