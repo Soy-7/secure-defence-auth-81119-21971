@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { roleConfigurations, roleOptions, RoleConfig, RoleKey } from "@/lib/roleConfig";
+
+const formatCountdown = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+};
 
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -23,11 +29,16 @@ const LoginForm = () => {
   const [userType, setUserType] = useState<RoleKey | "">("");
   const [serviceId, setServiceId] = useState("");
   const [serviceIdError, setServiceIdError] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const otpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
 
   const currentRoleConfig = userType ? roleConfigurations[userType] : undefined;
@@ -50,6 +61,8 @@ const LoginForm = () => {
     setUserType(roleKey);
     setServiceId("");
     setServiceIdError("");
+  setEmail("");
+  setEmailError("");
     setPasswordError("");
     setPhoneNumber("");
     setPhoneError("");
@@ -62,6 +75,13 @@ const LoginForm = () => {
     setServiceId(normalized);
     if (serviceIdError) {
       setServiceIdError("");
+    }
+  };
+
+  const handleEmailChange = (rawValue: string) => {
+    setEmail(rawValue);
+    if (emailError) {
+      setEmailError("");
     }
   };
 
@@ -78,6 +98,53 @@ const LoginForm = () => {
     if (phoneError) {
       setPhoneError("");
     }
+    if (otpSent) {
+      clearOtpTimer();
+      setOtpSent(false);
+      setOtpCountdown(0);
+    }
+  };
+
+  const clearOtpTimer = () => {
+    if (otpTimerRef.current) {
+      clearInterval(otpTimerRef.current);
+      otpTimerRef.current = null;
+    }
+  };
+
+  const startOtpCountdown = () => {
+    clearOtpTimer();
+    setOtpCountdown(60);
+    otpTimerRef.current = setInterval(() => {
+      setOtpCountdown((prev) => {
+        if (prev <= 1) {
+          clearOtpTimer();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendOtp = () => {
+    if (phoneNumber.length < 10) {
+      setPhoneError("Enter a valid phone number (10-15 digits).");
+      toast({
+        title: "Phone number required",
+        description: "Provide a reachable contact number for OTP delivery.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPhoneError("");
+    setOtpSent(true);
+    setOtpCode("");
+    startOtpCountdown();
+    toast({
+      title: "OTP Sent",
+      description: `A one-time code has been dispatched to ***-***-${phoneNumber.slice(-4)}.`,
+    });
   };
 
   const handleMfaMethodChange = (value: string) => {
@@ -87,8 +154,17 @@ const LoginForm = () => {
     }
 
     setMfaMethod(value === "sms" ? "sms" : "totp");
-    if (value !== "sms") {
+    if (value === "sms") {
+      clearOtpTimer();
+      setOtpSent(false);
+      setOtpCountdown(0);
+      setOtpCode("");
+    } else {
       setPhoneError("");
+      clearOtpTimer();
+      setOtpSent(false);
+      setOtpCountdown(0);
+      setOtpCode("");
     }
   };
 
@@ -98,18 +174,33 @@ const LoginForm = () => {
       return false;
     }
 
-    if (config.emailPattern && !config.emailPattern.test(value)) {
-      setServiceIdError(config.emailErrorMessage ?? "Please use the required official email domain.");
-      return false;
-    }
-
-    if (config.emailWhitelist && !config.emailWhitelist.includes(value.toLowerCase())) {
-      setServiceIdError("Email not found in approved auditor roster.");
-      return false;
-    }
-
     setServiceIdError("");
     return true;
+  };
+
+  const validateEmailForRole = (value: string, config: RoleConfig): string | null => {
+    const candidate = value.trim().toLowerCase();
+
+    if (!candidate) {
+      const message = config.emailErrorMessage ?? "Official defence email required.";
+      setEmailError(message);
+      return message;
+    }
+
+    if (config.emailWhitelist && !config.emailWhitelist.includes(candidate)) {
+      const message = "Email not listed in the approved roster.";
+      setEmailError(message);
+      return message;
+    }
+
+    if (config.emailPattern && !config.emailPattern.test(candidate)) {
+      const message = config.emailErrorMessage ?? "Please use the required official email domain.";
+      setEmailError(message);
+      return message;
+    }
+
+    setEmailError("");
+    return null;
   };
 
   const steps = [
@@ -136,6 +227,18 @@ const LoginForm = () => {
     }
   }, [currentRoleConfig?.enforcedMfaMethod, mfaMethod]);
 
+  useEffect(() => {
+    if (mfaMethod !== "sms") {
+      clearOtpTimer();
+      setOtpSent(false);
+      setOtpCountdown(0);
+    }
+  }, [mfaMethod]);
+
+  useEffect(() => {
+    return () => clearOtpTimer();
+  }, []);
+
   const roleSecurityMessages = currentRoleConfig
     ? [
         ...(currentRoleConfig.securityNotes ?? []),
@@ -143,6 +246,11 @@ const LoginForm = () => {
         ...(currentRoleConfig.readOnlyRole ? ["Access limited to read-only mode after login."] : []),
       ]
     : [];
+
+  const requiresEmailEntry = Boolean(
+    currentRoleConfig?.requiresDefenceEmail || currentRoleConfig?.inputType === "email"
+  );
+  const showServiceIdField = currentRoleConfig?.inputType !== "email";
 
   const handleCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,27 +265,45 @@ const LoginForm = () => {
     }
 
     const config = roleConfigurations[userType];
-    const normalizedId = computeNormalizedId(serviceId, config);
-    setServiceId(normalizedId);
 
-    if (!normalizedId) {
-      const message = `Provide your ${config.idLabel} to proceed.`;
-      setServiceIdError(message);
-      toast({
-        title: "Credential Required",
-        description: message,
-        variant: "destructive",
-      });
-      return;
+    if (showServiceIdField) {
+      const normalizedId = computeNormalizedId(serviceId, config);
+      setServiceId(normalizedId);
+
+      if (!normalizedId) {
+        const message = `Provide your ${config.idLabel} to proceed.`;
+        setServiceIdError(message);
+        toast({
+          title: "Credential Required",
+          description: message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!validateServiceId(normalizedId, config)) {
+        toast({
+          title: "Check your credentials",
+          description: config.idValidationMessage,
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
-    if (!validateServiceId(normalizedId, config)) {
-      toast({
-        title: "Check your credentials",
-        description: serviceIdError || config.idValidationMessage,
-        variant: "destructive",
-      });
-      return;
+    if (requiresEmailEntry) {
+      const normalizedEmail = email.trim().toLowerCase();
+      setEmail(normalizedEmail);
+      const emailMessage = validateEmailForRole(normalizedEmail, config);
+
+      if (emailMessage) {
+        toast({
+          title: "Resolve Email Requirement",
+          description: emailMessage,
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     toast({
@@ -190,7 +316,10 @@ const LoginForm = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!userType || !serviceId || !password) {
+    const missingServiceId = showServiceIdField && !serviceId;
+    const missingEmail = requiresEmailEntry && !email.trim();
+
+    if (!userType || missingServiceId || missingEmail || !password) {
       toast({
         title: "Missing Information",
         description: "Please fill in all required fields.",
@@ -200,16 +329,34 @@ const LoginForm = () => {
     }
 
     const config = roleConfigurations[userType as RoleKey];
-    const normalizedId = computeNormalizedId(serviceId, config);
-    setServiceId(normalizedId);
 
-    if (!validateServiceId(normalizedId, config)) {
-      toast({
-        title: "Credential Validation Failed",
-        description: serviceIdError || config.idValidationMessage,
-        variant: "destructive",
-      });
-      return;
+    if (showServiceIdField) {
+      const normalizedId = computeNormalizedId(serviceId, config);
+      setServiceId(normalizedId);
+
+      if (!validateServiceId(normalizedId, config)) {
+        toast({
+          title: "Credential Validation Failed",
+          description: config.idValidationMessage,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (requiresEmailEntry) {
+      const normalizedEmail = email.trim().toLowerCase();
+      setEmail(normalizedEmail);
+      const emailMessage = validateEmailForRole(normalizedEmail, config);
+
+      if (emailMessage) {
+        toast({
+          title: "Email Validation Failed",
+          description: emailMessage,
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     if (config.passwordPolicy) {
@@ -236,6 +383,10 @@ const LoginForm = () => {
     
     if (loginSuccess) {
       setCurrentStep(3);
+      clearOtpTimer();
+      setOtpSent(false);
+      setOtpCountdown(0);
+      setOtpCode("");
       toast({
         title: "Credentials Verified",
         description: "Please complete MFA authentication.",
@@ -274,9 +425,30 @@ const LoginForm = () => {
         });
         return;
       }
+
+      if (!otpSent) {
+        toast({
+          title: "Send OTP",
+          description: "Tap 'Send OTP' before entering the verification code.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (otpCountdown === 0) {
+        toast({
+          title: "OTP Expired",
+          description: "Your one-time code has expired. Request a new OTP.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     if (otpCode.length === 6) {
+      clearOtpTimer();
+      setOtpCountdown(0);
+      setOtpSent(false);
       toast({
         title: "Authentication Successful",
         description: "Redirecting to dashboard...",
@@ -428,6 +600,33 @@ const LoginForm = () => {
                   Provide a reachable number for SMS delivery.
                 </p>
               )}
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleSendOtp}
+                  disabled={otpCountdown > 0}
+                >
+                  {otpSent
+                    ? otpCountdown > 0
+                      ? `Resend in ${formatCountdown(otpCountdown)}`
+                      : "Resend OTP"
+                    : "Send OTP"}
+                </Button>
+                {otpSent && (
+                  <p
+                    className={`text-xs ${
+                      otpCountdown > 0
+                        ? "text-[hsl(122,39%,49%)]"
+                        : "text-[hsl(0,84%,60%)]"
+                    }`}
+                  >
+                    {otpCountdown > 0
+                      ? `OTP sent to ***-***-${phoneNumber.slice(-4)}. Valid for ${formatCountdown(otpCountdown)}.`
+                      : "OTP expired. Tap resend to get a fresh code."}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -520,8 +719,8 @@ const LoginForm = () => {
 
         {currentStep === 1 && (
           <form onSubmit={handleCredentialsSubmit} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+              <div className="space-y-2 md:col-span-1">
                 <div className="flex items-center gap-2">
                   <Label htmlFor="userType" className="flex-1">Select Your Role *</Label>
                   <span className="inline-flex w-4 h-4" aria-hidden="true" />
@@ -540,43 +739,77 @@ const LoginForm = () => {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="serviceId" className="flex-1">
-                    {(currentRoleConfig?.idLabel ?? "Credential ID")} *
+              {showServiceIdField && (
+                <div
+                  className={`space-y-2 ${
+                    requiresEmailEntry ? "md:col-span-1" : "md:col-span-2"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="serviceId" className="flex-1">
+                      {(currentRoleConfig?.idLabel ?? "Credential ID")} *
+                    </Label>
+                    {currentRoleConfig && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="text-[hsl(213,100%,18%)]/70 hover:text-[hsl(213,100%,18%)] focus:outline-none inline-flex h-5 w-5 items-center justify-center"
+                            aria-label="Role credential guidance"
+                          >
+                            <Info className="w-4 h-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs leading-relaxed">
+                          {currentRoleConfig.tooltip}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                  <Input
+                    id="serviceId"
+                    type="text"
+                    placeholder={currentRoleConfig?.placeholder ?? "Enter credential"}
+                    value={serviceId}
+                    onChange={(e) => handleServiceIdChange(e.target.value)}
+                    autoComplete="off"
+                    aria-invalid={Boolean(serviceIdError)}
+                  />
+                  {serviceIdError ? (
+                    <p className="text-xs text-[hsl(0,84%,60%)]">{serviceIdError}</p>
+                  ) : currentRoleConfig ? (
+                    <p className="text-xs text-[hsl(0,0%,45%)]">{currentRoleConfig.tooltip}</p>
+                  ) : null}
+                </div>
+              )}
+
+              {requiresEmailEntry && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="officialEmail">
+                    {currentRoleConfig?.inputType === "email"
+                      ? `${currentRoleConfig.idLabel} *`
+                      : "Official Defence Email *"}
                   </Label>
-                  {currentRoleConfig && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className="text-[hsl(213,100%,18%)]/70 hover:text-[hsl(213,100%,18%)] focus:outline-none inline-flex h-5 w-5 items-center justify-center"
-                          aria-label="Role credential guidance"
-                        >
-                          <Info className="w-4 h-4" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs leading-relaxed">
-                        {currentRoleConfig.tooltip}
-                      </TooltipContent>
-                    </Tooltip>
+                  <Input
+                    id="officialEmail"
+                    type="email"
+                    placeholder={currentRoleConfig?.inputType === "email" ? currentRoleConfig.placeholder : "yourname@army.mil.in"}
+                    value={email}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    autoComplete="off"
+                    aria-invalid={Boolean(emailError)}
+                  />
+                  {emailError ? (
+                    <p className="text-xs text-[hsl(0,84%,60%)]">{emailError}</p>
+                  ) : currentRoleConfig?.emailWarningMessage ? (
+                    <p className="text-xs text-[hsl(25,95%,60%)]">{currentRoleConfig.emailWarningMessage}</p>
+                  ) : currentRoleConfig?.tooltip ? (
+                    <p className="text-xs text-[hsl(0,0%,45%)]">{currentRoleConfig.tooltip}</p>
+                  ) : (
+                    <p className="text-xs text-[hsl(0,0%,45%)]">Use your authorised defence email for verification.</p>
                   )}
                 </div>
-                <Input
-                  id="serviceId"
-                  type={currentRoleConfig?.inputType ?? "text"}
-                  placeholder={currentRoleConfig?.placeholder ?? "Enter credential"}
-                  value={serviceId}
-                  onChange={(e) => handleServiceIdChange(e.target.value)}
-                  autoComplete="off"
-                  aria-invalid={Boolean(serviceIdError)}
-                />
-                {serviceIdError ? (
-                  <p className="text-xs text-[hsl(0,84%,60%)]">{serviceIdError}</p>
-                ) : currentRoleConfig ? (
-                  <p className="text-xs text-[hsl(0,0%,45%)]">{currentRoleConfig.tooltip}</p>
-                ) : null}
-              </div>
+              )}
             </div>
 
             {roleSecurityMessages.length > 0 && (
