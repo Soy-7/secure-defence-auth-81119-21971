@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { roleConfigurations, roleOptions, RoleConfig, RoleKey } from "@/lib/roleConfig";
 
 const BASE_PASSWORD_POLICY = "Minimum 12 characters, at least one uppercase letter, one number, and one special character.";
@@ -691,9 +692,14 @@ const LoginForm = () => {
             </Label>
           </div>
 
-          <Button type="submit" className="w-full" size="lg">
-            Verify & Login
-          </Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={() => setCurrentStep(2)}>
+              Back
+            </Button>
+            <Button type="submit" className="w-full" size="lg">
+              Verify & Login
+            </Button>
+          </div>
 
           <div className="text-center">
             <Button variant="link" size="sm">
@@ -859,6 +865,25 @@ const LoginForm = () => {
               </div>
             )}
 
+            <Collapsible>
+              <CollapsibleTrigger className="text-sm text-[hsl(207,90%,54%)] hover:underline">
+                What proofs we accept?
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2">
+                <div className="bg-[hsl(210,40%,96.1%)] p-4 rounded-lg text-sm space-y-2">
+                  <p className="font-semibold">Accepted Identification Documents:</p>
+                  <div className="grid gap-2 text-[hsl(0,0%,31%)] sm:grid-cols-2">
+                    <p>• SPARSH ID (Service Personnel)</p>
+                    <p>• Defence Force ID (D-FID)</p>
+                    <p>• Service Number</p>
+                    <p>• Pension Payment Order (PPO)</p>
+                    <p>• ECHS Card Number</p>
+                    <p>• Dependent ID Card</p>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
             <Button type="submit" className="w-full" size="lg">
               Continue to Security Check
             </Button>
@@ -888,12 +913,29 @@ const LoginForm = () => {
               </div>
               {passwordError ? (
                 <p className="text-xs text-[hsl(0,84%,60%)]">{passwordError}</p>
-              ) : null}
-              <ul className="text-xs text-[hsl(0,0%,45%)] list-disc list-inside space-y-1">
-                {passwordPolicyMessages.map((policy) => (
-                  <li key={policy}>{policy}</li>
-                ))}
-              </ul>
+              ) : (
+                <Collapsible>
+                  <div className="flex items-center gap-2 text-xs text-[hsl(0,0%,45%)]">
+                    <span>Must satisfy the requirements below.</span>
+                    <CollapsibleTrigger className="text-[hsl(207,90%,54%)] hover:underline">
+                      View policy
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsibleContent className="mt-2">
+                    <div className="bg-[hsl(210,40%,96.1%)] border border-[hsl(213,100%,18%)]/15 rounded-lg p-4 space-y-2">
+                      <p className="text-sm font-semibold text-[hsl(213,100%,18%)]">Password policy</p>
+                      <p className="text-xs text-[hsl(0,0%,31%)]">
+                        Ensure your password complies with the security standards below.
+                      </p>
+                      <ul className="text-xs text-[hsl(0,0%,31%)] list-disc list-inside space-y-1">
+                        {passwordPolicyMessages.map((policy) => (
+                          <li key={policy}>{policy}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
             </div>
 
             {currentRoleConfig?.requiresMfa && (

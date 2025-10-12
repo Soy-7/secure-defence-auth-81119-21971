@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info } from "lucide-react";
+import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -30,6 +30,7 @@ const RegisterForm = () => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [activationPassword, setActivationPassword] = useState("");
   const [activationPasswordError, setActivationPasswordError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [smsOtp, setSmsOtp] = useState("");
   const [smsOtpError, setSmsOtpError] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -122,20 +123,21 @@ const RegisterForm = () => {
   const currentStepTitle = steps.find((step) => step.id === currentStep)?.title ?? "Overview";
 
   const progressPercentage = useMemo(() => {
-    const cappedStep = Math.min(currentStep, 3);
-    return Math.round((cappedStep / 3) * 100);
+    const cappedStep = Math.min(currentStep, 4);
+    return Math.round((cappedStep / 4) * 100);
   }, [currentStep]);
 
   const { setPreviewContent, setPreviewActive } = useAuthPreview();
 
-  const previewStage = Math.min(currentStep, 3);
+  const previewStage = Math.min(currentStep, 4);
   const isTotpSetupActive = showMFASetup && mfaMethod === "totp";
+  const isVerifying = isSubmitted && !isVerified && !emailError;
 
   const previewContent = useMemo(
     () => (
       <div className="space-y-4">
         <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.32em] text-[hsl(213,100%,18%)]/60">
-          <span>Stage {previewStage} of 3</span>
+          <span>Stage {previewStage} of 4</span>
           <span>{currentStepTitle}</span>
         </div>
         <div className="h-1.5 w-full rounded-full bg-[hsl(213,100%,18%)]/12">
@@ -156,41 +158,63 @@ const RegisterForm = () => {
                 className="absolute inset-0 flex flex-col justify-between overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-br from-white via-[#f3f7ff] to-[#d7e6ff] p-8 text-[hsl(213,100%,18%)] shadow-[0_18px_55px_-28px_rgba(15,23,42,0.85)]"
                 style={{ backfaceVisibility: "hidden" }}
               >
-                <div className="flex items-start justify-between gap-6">
-                  <div className="space-y-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-[hsl(213,100%,18%)]/55">
-                      Defence Cyber Command
-                    </p>
-                    <div>
-                      <p className="text-2xl font-semibold leading-tight tracking-wide">
-                        {fullName.trim() || "Your Defence Name"}
-                      </p>
-                      <p className="text-xs uppercase tracking-[0.32em] text-[hsl(213,100%,18%)]/60">
-                        {roleDisplayName}
-                      </p>
+                {isVerifying ? (
+                  <div className="flex h-full flex-col justify-between gap-4 animate-pulse">
+                    <div className="flex items-start justify-between gap-6">
+                      <div className="space-y-3 flex-1">
+                        <div className="h-3 w-32 rounded bg-[hsl(213,100%,18%)]/20" />
+                        <div className="space-y-2">
+                          <div className="h-5 w-48 rounded bg-[hsl(213,100%,18%)]/25" />
+                          <div className="h-3 w-36 rounded bg-[hsl(213,100%,18%)]/15" />
+                        </div>
+                      </div>
+                      <div className="h-16 w-16 rounded-full border border-[hsl(213,100%,18%)]/10 bg-white/60" />
                     </div>
+                    <div className="space-y-3">
+                      <div className="h-3 w-full rounded bg-[hsl(213,100%,18%)]/15" />
+                      <div className="h-3 w-3/4 rounded bg-[hsl(213,100%,18%)]/10" />
+                    </div>
+                    <div className="h-3 w-40 rounded bg-[hsl(213,100%,18%)]/20" />
                   </div>
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[hsl(213,100%,18%)]/20 bg-white/80 text-lg font-semibold tracking-wide text-[hsl(213,100%,18%)]">
-                    {initials}
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-6">
+                      <div className="space-y-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-[hsl(213,100%,18%)]/55">
+                          Defence Cyber Command
+                        </p>
+                        <div>
+                          <p className="text-2xl font-semibold leading-tight tracking-wide">
+                            {fullName.trim() || "Your Defence Name"}
+                          </p>
+                          <p className="text-xs uppercase tracking-[0.32em] text-[hsl(213,100%,18%)]/60">
+                            {roleDisplayName}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[hsl(213,100%,18%)]/20 bg-white/80 text-lg font-semibold tracking-wide text-[hsl(213,100%,18%)]">
+                        {initials}
+                      </div>
+                    </div>
 
-                <dl className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between gap-6">
-                    <dt className="text-[hsl(213,100%,18%)]/55">{idLabel}</dt>
-                    <dd className="font-semibold tracking-wide text-[hsl(213,100%,18%)]">
-                      {serviceId.trim() || "Pending ID"}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-6">
-                    <dt className="text-[hsl(213,100%,18%)]/55">Contact</dt>
-                    <dd className="font-semibold tracking-wide text-[hsl(213,100%,18%)]">{maskedMobile}</dd>
-                  </div>
-                </dl>
+                    <dl className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between gap-6">
+                        <dt className="text-[hsl(213,100%,18%)]/55">{idLabel}</dt>
+                        <dd className="font-semibold tracking-wide text-[hsl(213,100%,18%)]">
+                          {serviceId.trim() || "Pending ID"}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-6">
+                        <dt className="text-[hsl(213,100%,18%)]/55">Contact</dt>
+                        <dd className="font-semibold tracking-wide text-[hsl(213,100%,18%)]">{maskedMobile}</dd>
+                      </div>
+                    </dl>
 
-                <div className="text-[11px] uppercase tracking-[0.36em] text-[hsl(213,100%,18%)]/55">
-                  {email.trim() || "name@defence.mil.in"}
-                </div>
+                    <div className="text-[11px] uppercase tracking-[0.36em] text-[hsl(213,100%,18%)]/55">
+                      {email.trim() || "name@defence.mil.in"}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div
@@ -204,7 +228,11 @@ const RegisterForm = () => {
             </div>
           </div>
         </div>
-        {isTotpSetupActive ? (
+        {isVerifying ? (
+          <p className="text-[11px] font-semibold text-[hsl(213,100%,18%)]/80">
+            Verification in progress… hold steady while we confirm your credentials.
+          </p>
+        ) : isTotpSetupActive ? (
           <p className="text-[11px] text-[hsl(213,100%,18%)]/65 max-w-[260px]">
             Scan this badge with your authenticator app. Codes refresh every 30 seconds.
           </p>
@@ -215,7 +243,7 @@ const RegisterForm = () => {
         )}
       </div>
     ),
-    [currentStepTitle, email, fullName, idLabel, initials, isTotpSetupActive, maskedMobile, previewStage, progressPercentage, roleDisplayName, serviceId]
+    [currentStepTitle, email, fullName, idLabel, initials, isTotpSetupActive, isVerifying, maskedMobile, previewStage, progressPercentage, roleDisplayName, serviceId]
   );
 
   const hasStartedFilling = useMemo(
@@ -360,6 +388,7 @@ const RegisterForm = () => {
     setServiceIdError("");
     setActivationPassword("");
     setActivationPasswordError("");
+  setShowPassword(false);
   setSmsOtp("");
   setSmsOtpError("");
   clearOtpTimer();
@@ -593,6 +622,8 @@ const RegisterForm = () => {
       return;
     }
 
+    setIsVerified(false);
+    setShowMFASetup(false);
     setIsSubmitted(true);
     setCurrentStep(4);
 
@@ -663,6 +694,17 @@ const RegisterForm = () => {
     });
   };
 
+  const handleBackFromMfa = () => {
+    clearOtpTimer();
+    setSmsOtp("");
+    setSmsOtpError("");
+    setOtpSent(false);
+    setOtpCountdown(0);
+    setShowMFASetup(false);
+    setIsSubmitted(false);
+    setCurrentStep(3);
+  };
+
   if (isSubmitted && !isVerified && !emailError) {
     return (
       <div className="space-y-6 text-center py-8">
@@ -719,6 +761,11 @@ const RegisterForm = () => {
   if (showMFASetup) {
     return (
       <div className="space-y-6">
+        <div className="flex justify-start">
+          <Button type="button" variant="ghost" className="gap-2 px-0 text-[hsl(213,100%,18%)] hover:text-[hsl(213,100%,18%)]" onClick={handleBackFromMfa}>
+            <ArrowLeft className="h-4 w-4" /> Back to Security Step
+          </Button>
+        </div>
         <div>
           <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Set Up Multi-Factor Authentication</h2>
           <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Secure your account with MFA</p>
@@ -827,7 +874,7 @@ const RegisterForm = () => {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6">
+  <div className="space-y-6">
       <div className="space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Register for Access</h2>
@@ -984,6 +1031,25 @@ const RegisterForm = () => {
             </div>
           )}
 
+          <Collapsible>
+            <CollapsibleTrigger className="text-sm text-[hsl(207,90%,54%)] hover:underline">
+              What proofs we accept?
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <div className="bg-[hsl(210,40%,96.1%)] p-4 rounded-lg text-sm space-y-2">
+                <p className="font-semibold">Accepted Identification Documents:</p>
+                <div className="grid gap-2 text-[hsl(0,0%,31%)] sm:grid-cols-2">
+                  <p>• SPARSH ID (Service Personnel)</p>
+                  <p>• Defence Force ID (D-FID)</p>
+                  <p>• Service Number</p>
+                  <p>• Pension Payment Order (PPO)</p>
+                  <p>• ECHS Card Number</p>
+                  <p>• Dependent ID Card</p>
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
             <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>
               Back
@@ -1067,53 +1133,53 @@ const RegisterForm = () => {
 
           <div className="space-y-2">
             <Label htmlFor="activationPassword">Create Portal Password *</Label>
-            <Input
-              id="activationPassword"
-              type="password"
-              placeholder="Create a secure password"
-              value={activationPassword}
-              onChange={(e) => handleActivationPasswordChange(e.target.value)}
-              autoComplete="new-password"
-              aria-invalid={Boolean(activationPasswordError)}
-            />
+            <div className="relative">
+              <Input
+                id="activationPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="Create a secure password"
+                value={activationPassword}
+                onChange={(e) => handleActivationPasswordChange(e.target.value)}
+                autoComplete="new-password"
+                aria-invalid={Boolean(activationPasswordError)}
+                className="pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-3 flex items-center text-[hsl(213,100%,18%)]/70 hover:text-[hsl(213,100%,18%)]"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {activationPasswordError ? (
               <p className="text-xs text-[hsl(0,84%,60%)]">{activationPasswordError}</p>
             ) : (
-              <p className="text-xs text-[hsl(0,0%,31%)]">Must satisfy the requirements below.</p>
+              <Collapsible>
+                <div className="flex items-center gap-2 text-xs text-[hsl(0,0%,31%)]">
+                  <span>Must satisfy the requirements below.</span>
+                  <CollapsibleTrigger className="text-[hsl(207,90%,54%)] hover:underline">
+                    View policy
+                  </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent className="mt-2">
+                  <div className="bg-[hsl(210,40%,96.1%)] border border-[hsl(213,100%,18%)]/15 rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-semibold text-[hsl(213,100%,18%)]">Password policy</p>
+                    <p className="text-xs text-[hsl(0,0%,31%)]">
+                      You will create your portal password during activation. Prepare one that complies with:
+                    </p>
+                    <ul className="text-xs text-[hsl(0,0%,31%)] list-disc list-inside space-y-1">
+                      {passwordPolicyMessages.map((policy) => (
+                        <li key={policy}>{policy}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </div>
-
-          <div className="bg-[hsl(210,40%,96.1%)] border border-[hsl(213,100%,18%)]/15 rounded-lg p-4 space-y-2">
-            <p className="text-sm font-semibold text-[hsl(213,100%,18%)]">Password policy</p>
-            <p className="text-xs text-[hsl(0,0%,31%)]">
-              You will create your portal password during activation. Prepare one that complies with:
-            </p>
-            <ul className="text-xs text-[hsl(0,0%,31%)] list-disc list-inside space-y-1">
-              {passwordPolicyMessages.map((policy) => (
-                <li key={policy}>{policy}</li>
-              ))}
-            </ul>
-          </div>
-
-          <Collapsible>
-            <CollapsibleTrigger className="text-sm text-[hsl(207,90%,54%)] hover:underline">
-              What proofs we accept?
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2">
-              <div className="bg-[hsl(210,40%,96.1%)] p-4 rounded-lg text-sm space-y-2">
-                <p className="font-semibold">Accepted Identification Documents:</p>
-                <ul className="space-y-1 text-[hsl(0,0%,31%)]">
-                  <li>• SPARSH ID (Service Personnel)</li>
-                  <li>• Defence Force ID (D-FID)</li>
-                  <li>• Service Number</li>
-                  <li>• Pension Payment Order (PPO)</li>
-                  <li>• ECHS Card Number</li>
-                  <li>• Dependent ID Card</li>
-                </ul>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
           <div className="flex items-start gap-2 py-2">
             <input
               type="checkbox"
