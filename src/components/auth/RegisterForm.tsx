@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info, Eye, EyeOff, ArrowLeft, Users, Medal, Radar, Star, Cpu, Search } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -17,6 +18,16 @@ const formatCountdown = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+};
+
+const roleAvatarIconMap: Record<RoleKey, LucideIcon> = {
+  personnel: Shield,
+  family: Users,
+  veteran: Medal,
+  cert: Radar,
+  commander: Star,
+  admin: Cpu,
+  auditor: Search,
 };
 
 const RegisterForm = () => {
@@ -109,6 +120,9 @@ const RegisterForm = () => {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }, [fullName]);
 
+  const roleAvatarIcon = useMemo(() => (userType ? roleAvatarIconMap[userType as RoleKey] : undefined), [userType]);
+  const RoleAvatarIconComponent = roleAvatarIcon;
+
   const maskedMobile = useMemo(() => {
     const normalized = mobile.replace(/\D/g, "");
     if (!normalized) {
@@ -192,8 +206,12 @@ const RegisterForm = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[hsl(213,100%,18%)]/20 bg-white/80 text-lg font-semibold tracking-wide text-[hsl(213,100%,18%)]">
-                        {initials}
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[hsl(213,100%,18%)]/20 bg-white/80 text-[hsl(213,100%,18%)]">
+                        {RoleAvatarIconComponent ? (
+                          <RoleAvatarIconComponent className="h-8 w-8" />
+                        ) : (
+                          <span className="text-lg font-semibold tracking-wide">{initials}</span>
+                        )}
                       </div>
                     </div>
 
@@ -243,7 +261,7 @@ const RegisterForm = () => {
         )}
       </div>
     ),
-    [currentStepTitle, email, fullName, idLabel, initials, isTotpSetupActive, isVerifying, maskedMobile, previewStage, progressPercentage, roleDisplayName, serviceId]
+    [RoleAvatarIconComponent, currentStepTitle, email, fullName, idLabel, initials, isTotpSetupActive, isVerifying, maskedMobile, previewStage, progressPercentage, roleDisplayName, serviceId]
   );
 
   const hasStartedFilling = useMemo(
