@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Shield } from "lucide-react";
-import cyberIllustration from "@/assets/cyber-illustration.png";
+import heroVideo from "@/assets/cyber-illustration_sqr.mp4";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -25,10 +25,14 @@ const AuthLayout = ({ children, activeTab = "login" }: AuthLayoutProps) => {
 
               {/* Illustration */}
               <div className="flex items-center justify-center py-4">
-                <img 
-                  src={cyberIllustration} 
-                  alt="Cybersecurity Operations Center" 
-                  className="w-full max-w-[420px] h-auto object-contain"
+                <video
+                  className="w-full max-w-[475px] h-auto rounded-xl object-cover"
+                  src={heroVideo}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  aria-label="Cybersecurity operations overview"
                 />
               </div>
             </div>
