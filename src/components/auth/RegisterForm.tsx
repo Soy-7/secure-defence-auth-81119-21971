@@ -1,19 +1,22 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Shield, Smartphone, CheckCircle2, Clock, QrCode } from "lucide-react";
+import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { roleConfigurations, roleOptions, RoleKey, RoleConfig, defenceEmailPattern } from "@/lib/roleConfig";
 
 const RegisterForm = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
-  const [userType, setUserType] = useState("");
+  const [userType, setUserType] = useState<RoleKey | "">("");
   const [serviceId, setServiceId] = useState("");
+  const [serviceIdError, setServiceIdError] = useState("");
   const [unit, setUnit] = useState("");
   const [mfaMethod, setMfaMethod] = useState<"totp" | "sms">("totp");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -22,18 +25,8 @@ const RegisterForm = () => {
   const [isVerified, setIsVerified] = useState(false);
   const [showMFASetup, setShowMFASetup] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [emailWarning, setEmailWarning] = useState("");
   const { toast } = useToast();
-
-  const defenceDomains = ["@army.", "@navy.", "@airforce.", "@defence."];
-
-  const validateEmail = (value: string) => {
-    setEmail(value);
-    if (value && !defenceDomains.some(domain => value.includes(domain))) {
-      setEmailError("Email domain verification pending - Manual review required");
-    } else {
-      setEmailError("");
-    }
-  };
 
   const steps = [
     { id: 1, title: "Identity", description: "Who are you?" },
@@ -41,6 +34,146 @@ const RegisterForm = () => {
     { id: 3, title: "Security", description: "MFA & consent" },
     { id: 4, title: "Activate", description: "Secure account" },
   ];
+
+  const currentRoleConfig = useMemo<RoleConfig | undefined>(
+    () => (userType ? roleConfigurations[userType] : undefined),
+    [userType]
+  );
+
+  const roleSecurityMessages = useMemo(
+    () =>
+      currentRoleConfig
+        ? [
+            ...(currentRoleConfig.securityNotes ?? []),
+            ...(currentRoleConfig.highPrivilege ? ["High-privilege monitoring enabled."] : []),
+            ...(currentRoleConfig.readOnlyRole ? ["Access is read-only after approval."] : []),
+          ]
+        : [],
+    [currentRoleConfig]
+  );
+
+  const computeNormalizedId = (value: string, config?: RoleConfig) => {
+    if (!config) {
+      return value.trim();
+    }
+    if (config.inputType === "email") {
+      return value.trim().toLowerCase();
+    }
+    const cleaned = value.replace(/\s+/g, "");
+    return config.enforceUppercase === false ? cleaned.trim() : cleaned.toUpperCase();
+  };
+
+  const resetEmailMessages = () => {
+    setEmailError("");
+    setEmailWarning("");
+  };
+
+  const evaluateEmailAgainstRole = (
+    config?: RoleConfig,
+    providedEmail?: string,
+    roleKey?: RoleKey
+  ) => {
+    resetEmailMessages();
+
+    if (!config) {
+      return;
+    }
+
+    const candidate = (providedEmail ?? email).trim().toLowerCase();
+    if (!candidate) {
+      return;
+    }
+
+    if (config.emailWhitelist && !config.emailWhitelist.includes(candidate)) {
+      setEmailError("Email not listed in the approved roster.");
+      return;
+    }
+
+    if (config.requiresDefenceEmail && config.emailPattern && !config.emailPattern.test(candidate)) {
+      setEmailError(config.emailErrorMessage ?? "Official defence email required.");
+      return;
+    }
+
+    if (config.emailPattern && !config.emailPattern.test(candidate)) {
+      if (config.emailWarningMessage) {
+        setEmailWarning(config.emailWarningMessage);
+      }
+      return;
+    }
+
+    if (roleKey === "family" && !defenceEmailPattern.test(candidate)) {
+      setEmailWarning(
+        config.emailWarningMessage ?? "Non-defence email detected. Manual verification required."
+      );
+    }
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    evaluateEmailAgainstRole(currentRoleConfig, value, userType || undefined);
+  };
+
+  const handleRoleChange = (value: string) => {
+    const roleKey = value as RoleKey;
+    setUserType(roleKey);
+    setServiceId("");
+    setServiceIdError("");
+    evaluateEmailAgainstRole(roleConfigurations[roleKey], undefined, roleKey);
+    const enforcedMethod = roleConfigurations[roleKey]?.enforcedMfaMethod;
+    setMfaMethod(enforcedMethod ?? "totp");
+  };
+
+  const handleServiceIdChange = (rawValue: string) => {
+    const normalized = computeNormalizedId(rawValue, currentRoleConfig);
+    setServiceId(normalized);
+    if (serviceIdError) {
+      setServiceIdError("");
+    }
+  };
+
+  const handleMfaMethodChange = (value: string) => {
+    if (currentRoleConfig?.enforcedMfaMethod) {
+      setMfaMethod(currentRoleConfig.enforcedMfaMethod);
+      return;
+    }
+
+    setMfaMethod(value === "sms" ? "sms" : "totp");
+  };
+
+  const validateServiceId = (value: string, config: RoleConfig) => {
+    if (!value) {
+      const message = `Provide your ${config.idLabel}.`;
+      setServiceIdError(message);
+      return message;
+    }
+
+    if (!config.idPattern.test(value)) {
+      setServiceIdError(config.idValidationMessage);
+      return config.idValidationMessage;
+    }
+
+    if (config.inputType === "email") {
+      if (config.emailWhitelist && !config.emailWhitelist.includes(value)) {
+        const message = "Email not listed in the approved roster.";
+        setServiceIdError(message);
+        return message;
+      }
+      if (config.emailPattern && !config.emailPattern.test(value)) {
+        const message = config.emailErrorMessage ?? config.idValidationMessage;
+        setServiceIdError(message);
+        return message;
+      }
+    }
+
+    setServiceIdError("");
+    return null;
+  };
+
+  useEffect(() => {
+    if (currentRoleConfig?.enforcedMfaMethod && mfaMethod !== currentRoleConfig.enforcedMfaMethod) {
+      setMfaMethod(currentRoleConfig.enforcedMfaMethod);
+    }
+  }, [currentRoleConfig?.enforcedMfaMethod, mfaMethod]);
 
   const handleIdentityStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,10 +206,33 @@ const RegisterForm = () => {
   const handleServiceStep = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!userType || !serviceId) {
+    if (!userType) {
       toast({
-        title: "Missing Service Details",
-        description: "Select your role and enter a valid Service ID.",
+        title: "Select Your Role",
+        description: "Choose your role to continue registration.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const config = roleConfigurations[userType];
+    const normalizedId = computeNormalizedId(serviceId, config);
+    setServiceId(normalizedId);
+
+    const serviceIdMessage = validateServiceId(normalizedId, config);
+    if (serviceIdMessage) {
+      toast({
+        title: "Check your credentials",
+        description: serviceIdMessage,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (emailError) {
+      toast({
+        title: "Resolve Email Requirement",
+        description: emailError,
         variant: "destructive",
       });
       return;
@@ -106,7 +262,7 @@ const RegisterForm = () => {
 
     // Simulate verification process
     setTimeout(() => {
-      const isDefenceEmail = defenceDomains.some(domain => email.includes(domain));
+      const isDefenceEmail = defenceEmailPattern.test(email.toLowerCase());
       setIsVerified(isDefenceEmail);
 
       if (isDefenceEmail) {
@@ -254,7 +410,8 @@ const RegisterForm = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider>
+      <div className="space-y-6">
       <div className="space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Register for Access</h2>
@@ -320,19 +477,18 @@ const RegisterForm = () => {
               type="email"
               placeholder="yourname@army.mil.in"
               value={email}
-              onChange={(e) => validateEmail(e.target.value)}
+              onChange={(e) => handleEmailChange(e.target.value)}
             />
-            {emailError && (
-              <p className="text-xs text-[hsl(25,95%,60%)]">
-                {emailError}
-              </p>
-            )}
-            {email && !emailError && (
+            {emailError ? (
+              <p className="text-xs text-[hsl(0,84%,60%)]">{emailError}</p>
+            ) : emailWarning ? (
+              <p className="text-xs text-[hsl(25,95%,60%)]">{emailWarning}</p>
+            ) : email ? (
               <p className="text-xs text-[hsl(122,39%,49%)] flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                Defence email verified
+                Email domain verified
               </p>
-            )}
+            ) : null}
           </div>
 
           <Button type="submit" className="w-full" size="lg">
@@ -345,32 +501,57 @@ const RegisterForm = () => {
         <form onSubmit={handleServiceStep} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="userType">User Type *</Label>
-              <Select value={userType} onValueChange={setUserType}>
+              <Label htmlFor="userType">Select Your Role *</Label>
+              <Select value={userType} onValueChange={handleRoleChange}>
                 <SelectTrigger id="userType">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="personnel">Defence Personnel</SelectItem>
-                  <SelectItem value="family">Family Member</SelectItem>
-                  <SelectItem value="veteran">Veteran</SelectItem>
-                  <SelectItem value="cert">CERT Analyst</SelectItem>
-                  <SelectItem value="commander">Commander</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
-                  <SelectItem value="auditor">Auditor</SelectItem>
+                  {roleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="serviceId">Service ID *</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="serviceId">
+                  {(currentRoleConfig?.idLabel ?? "Credential ID")} *
+                </Label>
+                {currentRoleConfig && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-[hsl(213,100%,18%)]/70 hover:text-[hsl(213,100%,18%)] focus:outline-none"
+                        aria-label="Role credential guidance"
+                      >
+                        <Info className="w-4 h-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs leading-relaxed">
+                      {currentRoleConfig.tooltip}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
               <Input
                 id="serviceId"
-                type="text"
-                placeholder="Enter ID"
+                type={currentRoleConfig?.inputType ?? "text"}
+                placeholder={currentRoleConfig?.placeholder ?? "Enter credential"}
                 value={serviceId}
-                onChange={(e) => setServiceId(e.target.value)}
+                onChange={(e) => handleServiceIdChange(e.target.value)}
+                autoComplete="off"
+                aria-invalid={Boolean(serviceIdError)}
               />
+              {serviceIdError ? (
+                <p className="text-xs text-[hsl(0,84%,60%)]">{serviceIdError}</p>
+              ) : currentRoleConfig ? (
+                <p className="text-xs text-[hsl(0,0%,45%)]">{currentRoleConfig.tooltip}</p>
+              ) : null}
             </div>
           </div>
 
@@ -384,6 +565,19 @@ const RegisterForm = () => {
               onChange={(e) => setUnit(e.target.value)}
             />
           </div>
+
+          {roleSecurityMessages.length > 0 && (
+            <div className="bg-[hsl(210,40%,96.1%)] border border-[hsl(213,100%,18%)]/15 rounded-lg p-3 text-xs text-[hsl(0,0%,31%)] space-y-1">
+              <p className="font-semibold text-[hsl(213,100%,18%)] text-xs uppercase tracking-wide">
+                Role security notes
+              </p>
+              <ul className="space-y-1 list-disc list-inside">
+                {roleSecurityMessages.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
             <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>
@@ -408,7 +602,7 @@ const RegisterForm = () => {
                   name="mfa"
                   value="totp"
                   checked={mfaMethod === "totp"}
-                  onChange={(e) => setMfaMethod(e.target.value as "totp" | "sms")}
+                  onChange={(e) => handleMfaMethodChange(e.target.value)}
                   className="rounded-full"
                 />
                 <Label htmlFor="totp" className="font-normal cursor-pointer flex items-center gap-2">
@@ -423,7 +617,8 @@ const RegisterForm = () => {
                   name="mfa"
                   value="sms"
                   checked={mfaMethod === "sms"}
-                  onChange={(e) => setMfaMethod(e.target.value as "totp" | "sms")}
+                  onChange={(e) => handleMfaMethodChange(e.target.value)}
+                  disabled={currentRoleConfig?.enforcedMfaMethod === "totp"}
                   className="rounded-full"
                 />
                 <Label htmlFor="sms" className="font-normal cursor-pointer flex items-center gap-2">
@@ -433,7 +628,9 @@ const RegisterForm = () => {
               </div>
             </div>
             <p className="text-xs text-[hsl(0,0%,31%)]">
-              TOTP offers higher security and works offline
+              {currentRoleConfig?.enforcedMfaMethod === "totp"
+                ? "Authenticator-based MFA is enforced for this role."
+                : "TOTP offers higher security and works offline"}
             </p>
           </div>
 
@@ -486,7 +683,8 @@ const RegisterForm = () => {
           All registrations are verified. False information may result in legal action.
         </AlertDescription>
       </Alert>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 };
 
