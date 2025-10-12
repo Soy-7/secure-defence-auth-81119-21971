@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { roleConfigurations, roleOptions, RoleKey, RoleConfig, defenceEmailPattern } from "@/lib/roleConfig";
+import { useAuthPreview } from "./AuthLayout";
 
 const BASE_PASSWORD_POLICY = "Minimum 12 characters, at least one uppercase letter, one number, and one special character.";
 const PASSWORD_POLICY_REGEX = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}$/;
@@ -25,7 +26,6 @@ const RegisterForm = () => {
   const [userType, setUserType] = useState<RoleKey | "">("");
   const [serviceId, setServiceId] = useState("");
   const [serviceIdError, setServiceIdError] = useState("");
-  const [unit, setUnit] = useState("");
   const [mfaMethod, setMfaMethod] = useState<"totp" | "sms">("totp");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [activationPassword, setActivationPassword] = useState("");
@@ -36,6 +36,7 @@ const RegisterForm = () => {
   const [otpCountdown, setOtpCountdown] = useState(0);
   const otpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
+  const [hasActivatedPreview, setHasActivatedPreview] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [showMFASetup, setShowMFASetup] = useState(false);
@@ -88,6 +89,167 @@ const RegisterForm = () => {
     }
     return Array.from(messages);
   }, [baselinePasswordMessage, currentRoleConfig?.passwordPolicy?.message]);
+
+  const roleDisplayName = useMemo(
+    () => roleOptions.find((option) => option.value === userType)?.label ?? "Select role",
+    [userType]
+  );
+
+  const idLabel = currentRoleConfig?.idLabel ?? "Credential ID";
+
+  const initials = useMemo(() => {
+    if (!fullName.trim()) {
+      return "DF";
+    }
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }, [fullName]);
+
+  const maskedMobile = useMemo(() => {
+    const normalized = mobile.replace(/\D/g, "");
+    if (!normalized) {
+      return "Awaiting mobile number";
+    }
+    if (normalized.length < 4) {
+      return "Awaiting full mobile number";
+    }
+    return `***-***-${normalized.slice(-4)}`;
+  }, [mobile]);
+
+  const currentStepTitle = steps.find((step) => step.id === currentStep)?.title ?? "Overview";
+
+  const progressPercentage = useMemo(() => {
+    const cappedStep = Math.min(currentStep, 3);
+    return Math.round((cappedStep / 3) * 100);
+  }, [currentStep]);
+
+  const { setPreviewContent, setPreviewActive } = useAuthPreview();
+
+  const previewStage = Math.min(currentStep, 3);
+  const isTotpSetupActive = showMFASetup && mfaMethod === "totp";
+
+  const previewContent = useMemo(
+    () => (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.32em] text-[hsl(213,100%,18%)]/60">
+          <span>Stage {previewStage} of 3</span>
+          <span>{currentStepTitle}</span>
+        </div>
+        <div className="h-1.5 w-full rounded-full bg-[hsl(213,100%,18%)]/12">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-[hsl(207,90%,54%)] to-[hsl(213,100%,18%)]"
+            style={{ width: `${progressPercentage}%` }}
+          />
+        </div>
+        <div className="relative mx-auto w-[420px] max-w-full">
+          <div className="absolute -top-10 left-6 h-24 w-24 rounded-full bg-white/40 blur-3xl" />
+          <div className="absolute -bottom-12 right-8 h-28 w-28 rounded-full bg-[hsl(207,90%,80%)]/40 blur-3xl" />
+          <div className="relative [perspective:1600px]">
+            <div
+              className="relative h-[260px] w-full transition-transform duration-700 ease-out"
+              style={{ transformStyle: "preserve-3d", transform: isTotpSetupActive ? "rotateY(180deg)" : "rotateY(0deg)" }}
+            >
+              <div
+                className="absolute inset-0 flex flex-col justify-between overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-br from-white via-[#f3f7ff] to-[#d7e6ff] p-8 text-[hsl(213,100%,18%)] shadow-[0_18px_55px_-28px_rgba(15,23,42,0.85)]"
+                style={{ backfaceVisibility: "hidden" }}
+              >
+                <div className="flex items-start justify-between gap-6">
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-[hsl(213,100%,18%)]/55">
+                      Defence Cyber Command
+                    </p>
+                    <div>
+                      <p className="text-2xl font-semibold leading-tight tracking-wide">
+                        {fullName.trim() || "Your Defence Name"}
+                      </p>
+                      <p className="text-xs uppercase tracking-[0.32em] text-[hsl(213,100%,18%)]/60">
+                        {roleDisplayName}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[hsl(213,100%,18%)]/20 bg-white/80 text-lg font-semibold tracking-wide text-[hsl(213,100%,18%)]">
+                    {initials}
+                  </div>
+                </div>
+
+                <dl className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-6">
+                    <dt className="text-[hsl(213,100%,18%)]/55">{idLabel}</dt>
+                    <dd className="font-semibold tracking-wide text-[hsl(213,100%,18%)]">
+                      {serviceId.trim() || "Pending ID"}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-6">
+                    <dt className="text-[hsl(213,100%,18%)]/55">Contact</dt>
+                    <dd className="font-semibold tracking-wide text-[hsl(213,100%,18%)]">{maskedMobile}</dd>
+                  </div>
+                </dl>
+
+                <div className="text-[11px] uppercase tracking-[0.36em] text-[hsl(213,100%,18%)]/55">
+                  {email.trim() || "name@defence.mil.in"}
+                </div>
+              </div>
+
+              <div
+                className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-br from-white via-[#f3f7ff] to-[#d7e6ff] p-8 shadow-[0_18px_55px_-28px_rgba(15,23,42,0.85)]"
+                style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+              >
+                <div className="flex h-36 w-36 items-center justify-center rounded-2xl border border-[hsl(213,100%,18%)]/20 bg-[hsl(213,100%,18%)]/5">
+                  <QrCode className="h-24 w-24 text-[hsl(213,100%,18%)]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {isTotpSetupActive ? (
+          <p className="text-[11px] text-[hsl(213,100%,18%)]/65 max-w-[260px]">
+            Scan this badge with your authenticator app. Codes refresh every 30 seconds.
+          </p>
+        ) : (
+          <p className="text-[11px] text-[hsl(213,100%,18%)]/65">
+            Preview mirrors your inputs in real time. Details finalize after verification.
+          </p>
+        )}
+      </div>
+    ),
+    [currentStepTitle, email, fullName, idLabel, initials, isTotpSetupActive, maskedMobile, previewStage, progressPercentage, roleDisplayName, serviceId]
+  );
+
+  const hasStartedFilling = useMemo(
+    () =>
+      Boolean(
+        fullName.trim() ||
+          email.trim() ||
+          mobile.trim() ||
+          serviceId.trim() ||
+          activationPassword ||
+          userType ||
+          currentStep > 1
+      ),
+    [fullName, email, mobile, serviceId, activationPassword, userType, currentStep]
+  );
+
+  useEffect(() => {
+    if (!hasActivatedPreview && hasStartedFilling) {
+      setHasActivatedPreview(true);
+    }
+  }, [hasActivatedPreview, hasStartedFilling]);
+
+  useEffect(() => {
+    setPreviewActive(hasActivatedPreview);
+    return () => setPreviewActive(false);
+  }, [hasActivatedPreview, setPreviewActive]);
+
+  useEffect(() => {
+    if (hasActivatedPreview) {
+      setPreviewContent(previewContent);
+    } else {
+      setPreviewContent(null);
+    }
+  }, [hasActivatedPreview, previewContent, setPreviewContent]);
 
   const clearOtpTimer = () => {
     if (otpTimerRef.current) {
@@ -571,23 +733,15 @@ const RegisterForm = () => {
 
         {mfaMethod === "totp" ? (
           <div className="space-y-4">
-            <div className="bg-[hsl(210,40%,96.1%)] p-6 rounded-lg text-center space-y-4">
-              <QrCode className="w-24 h-24 mx-auto text-[hsl(213,100%,18%)]" />
-              <p className="text-sm font-medium">Scan this QR code with your authenticator app</p>
-              <p className="text-xs text-[hsl(0,0%,31%)]">
-                Use Google Authenticator, Microsoft Authenticator, or any TOTP-compatible app
-              </p>
-            </div>
-
             <div className="space-y-2">
               <Label>Manual Entry Key</Label>
-              <Input 
-                value="JBSWY3DPEHPK3PXP" 
-                readOnly 
+              <Input
+                value="JBSWY3DPEHPK3PXP"
+                readOnly
                 className="font-mono text-center"
               />
               <p className="text-xs text-[hsl(0,0%,31%)]">
-                Use this if you can't scan the QR code
+                Use this if you can't scan the QR code from the badge.
               </p>
             </div>
 
@@ -815,17 +969,6 @@ const RegisterForm = () => {
                 <p className="text-xs text-[hsl(0,0%,45%)]">{currentRoleConfig.tooltip}</p>
               ) : null}
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="unit">Unit / Organization (Optional)</Label>
-            <Input
-              id="unit"
-              type="text"
-              placeholder="Enter your unit or organization"
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-            />
           </div>
 
           {roleSecurityMessages.length > 0 && (
