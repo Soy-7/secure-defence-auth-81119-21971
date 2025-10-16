@@ -3,13 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff, Shield, Smartphone, AlertTriangle, Info } from "lucide-react";
+import { Eye, EyeOff, Shield, Smartphone, AlertTriangle, Info, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { roleConfigurations, roleOptions, RoleConfig, RoleKey } from "@/lib/roleConfig";
+import { cn } from "@/lib/utils";
+import "./auth-stepper.css";
 
 const BASE_PASSWORD_POLICY = "Minimum 12 characters, at least one uppercase letter, one number, and one special character.";
 const PASSWORD_POLICY_REGEX = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}$/;
@@ -719,32 +721,54 @@ const LoginForm = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            {steps.map((step) => (
-              <div key={step.id} className="flex-1 flex items-center gap-3">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${
-                    currentStep >= step.id
-                      ? "bg-gradient-to-br from-[hsl(207,90%,54%)] to-[hsl(213,100%,18%)] text-white"
-                      : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
-                  }`}
-                >
-                  {step.id}
-                </div>
-                <div className="hidden md:block">
-                  <p className="text-xs font-semibold text-[hsl(213,100%,18%)]">{step.title}</p>
-                  <p className="text-[10px] text-[hsl(0,0%,31%)]">{step.description}</p>
-                </div>
-                {step.id !== steps.length && (
+            {steps.map((step) => {
+              const isActive = currentStep === step.id;
+              const isComplete = currentStep > step.id;
+
+              return (
+                <div key={step.id} className="flex flex-1 items-center gap-3">
                   <div
-                    className={`flex-1 h-0.5 rounded ${
-                      currentStep > step.id
-                        ? "bg-[hsl(207,90%,54%)]"
-                        : "bg-[hsl(213,100%,18%)]/10"
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
+                    className={cn(
+                      "step-node w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold",
+                      isComplete || isActive
+                        ? "bg-gradient-to-br from-[hsl(207,90%,54%)] to-[hsl(213,100%,18%)] text-white"
+                        : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]",
+                      isActive && "step-node--active",
+                      isComplete && "step-node--complete"
+                    )}
+                  >
+                    {step.id}
+                  </div>
+                  <div
+                    className={cn(
+                      "hidden md:block transition-all duration-300",
+                      isActive
+                        ? "opacity-100 translate-y-0"
+                        : isComplete
+                          ? "opacity-80 translate-y-[1px]"
+                          : "opacity-60 translate-y-[2px]"
+                    )}
+                  >
+                    <p className="text-xs font-semibold text-[hsl(213,100%,18%)]">{step.title}</p>
+                    <p className="text-[10px] text-[hsl(0,0%,31%)]">{step.description}</p>
+                  </div>
+                  {step.id !== steps.length && (
+                    <div className="flex-1">
+                      <div className={cn("step-line", isComplete && "step-line--complete") }>
+                        <span
+                          className={cn(
+                            "step-line__progress",
+                            isComplete && "step-line__progress--filled",
+                            isActive && !isComplete && "step-line__progress--active"
+                          )}
+                          aria-hidden="true"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -853,16 +877,19 @@ const LoginForm = () => {
             </div>
 
             {roleSecurityMessages.length > 0 && (
-              <div className="bg-[hsl(210,40%,96.1%)] border border-[hsl(213,100%,18%)]/15 rounded-lg p-3 text-xs text-[hsl(0,0%,31%)] space-y-1">
-                <p className="font-semibold text-[hsl(213,100%,18%)] text-xs uppercase tracking-wide">
-                  Role security notes
-                </p>
-                <ul className="space-y-1 list-disc list-inside">
-                  {roleSecurityMessages.map((note) => (
-                    <li key={note}>{note}</li>
-                  ))}
-                </ul>
-              </div>
+              <Collapsible>
+                <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-lg border border-[hsl(213,100%,18%)]/10 bg-[hsl(210,40%,96.1%)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[hsl(213,100%,18%)] transition hover:bg-[hsl(210,40%,94%)]">
+                  <span>Role security notes</span>
+                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="border-x border-b border-[hsl(213,100%,18%)]/10 bg-[hsl(210,40%,96.1%)] px-4 py-3 text-xs text-[hsl(0,0%,31%)]">
+                  <ul className="space-y-1 list-disc list-inside">
+                    {roleSecurityMessages.map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
             )}
 
             <Collapsible>

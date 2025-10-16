@@ -40,6 +40,8 @@ export const auditorWhitelist = [
 
 export const defenceEmailPattern = /^[a-z0-9._%+-]+@(?:army|navy|airforce|drdo)\.(?:mil|gov)\.in$/i;
 export const adminEmailPattern = /^[a-z0-9._%+-]+@(?:mod\.gov\.in|defence\.in)$/i;
+export const modCredentialPattern = /^MOD-[A-Z]{2,4}-\d{4}$/;
+export const auditorCredentialPattern = /^AUD-[A-Z]{2,5}-\d{3,}$/;
 
 export const roleOptions: { value: RoleKey; label: string }[] = [
 	{ value: "personnel", label: "Defence Personnel" },
@@ -134,13 +136,13 @@ export const roleConfigurations: Record<RoleKey, RoleConfig> = {
 		],
 	},
 	admin: {
-		idLabel: "Official Email ID",
-		placeholder: "e.g., admin@mod.gov.in",
-		tooltip: "Use Ministry of Defence email credentials.",
-		idPattern: adminEmailPattern,
+		idLabel: "MOD Credential ID",
+		placeholder: "e.g., MOD-HQ-2045",
+		tooltip: "Issued by the MoD Identity Directorate. Format: MOD-UNIT-####.",
+		idPattern: modCredentialPattern,
 		idValidationMessage:
-			"Email must belong to the mod.gov.in or defence.in domain.",
-		inputType: "email",
+			"Credential ID must follow MOD-UNIT-#### with an approved unit code and four digits.",
+		enforceUppercase: true,
 		requiresMfa: true,
 		enforcedMfaMethod: "totp",
 		requiresDefenceEmail: true,
@@ -157,12 +159,12 @@ export const roleConfigurations: Record<RoleKey, RoleConfig> = {
 		],
 	},
 	auditor: {
-		idLabel: "Audit Credential / Official Email",
-		placeholder: "e.g., auditor@mod.gov.in",
-		tooltip: "Auditor access is read-only and limited to approved email addresses.",
-		idPattern: /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i,
-		idValidationMessage: "Enter a valid official email address.",
-		inputType: "email",
+		idLabel: "Audit Credential ID",
+		placeholder: "e.g., AUD-CTRL-302",
+		tooltip: "Issued with read-only audit accounts. Format: AUD-TEAM-###.",
+		idPattern: auditorCredentialPattern,
+		idValidationMessage: "Credential ID must follow AUD-TEAM-### with an approved team code.",
+		enforceUppercase: true,
 		requiresDefenceEmail: true,
 		emailPattern: adminEmailPattern,
 		emailErrorMessage:

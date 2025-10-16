@@ -4,13 +4,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { LucideIcon } from "lucide-react";
-import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info, Eye, EyeOff, ArrowLeft, Users, Medal, Radar, Star, Cpu, Search } from "lucide-react";
+import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info, Eye, EyeOff, ArrowLeft, Users, Medal, Radar, Star, Cpu, Search, ChevronDown } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { roleConfigurations, roleOptions, RoleKey, RoleConfig, defenceEmailPattern } from "@/lib/roleConfig";
+import { cn } from "@/lib/utils";
 import { useAuthPreview } from "./AuthLayout";
+import "./register-preview.css";
+import "./auth-stepper.css";
 
 const BASE_PASSWORD_POLICY = "Minimum 12 characters, at least one uppercase letter, one number, and one special character.";
 const PASSWORD_POLICY_REGEX = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}$/;
@@ -172,6 +175,7 @@ const RegisterForm = () => {
                 className="absolute inset-0 flex flex-col justify-between overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-br from-white via-[#f3f7ff] to-[#d7e6ff] p-8 text-[hsl(213,100%,18%)] shadow-[0_18px_55px_-28px_rgba(15,23,42,0.85)]"
                 style={{ backfaceVisibility: "hidden" }}
               >
+                <div className={`generate-overlay ${isVerifying ? "generate-overlay--verifying" : ""}`} aria-hidden="true" />
                 {isVerifying ? (
                   <div className="flex h-full flex-col justify-between gap-4 animate-pulse">
                     <div className="flex items-start justify-between gap-6">
@@ -239,6 +243,7 @@ const RegisterForm = () => {
                 className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-br from-white via-[#f3f7ff] to-[#d7e6ff] p-8 shadow-[0_18px_55px_-28px_rgba(15,23,42,0.85)]"
                 style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
               >
+                <div className={`generate-overlay ${isVerifying ? "generate-overlay--verifying" : ""}`} aria-hidden="true" />
                 <div className="flex h-36 w-36 items-center justify-center rounded-2xl border border-[hsl(213,100%,18%)]/20 bg-[hsl(213,100%,18%)]/5">
                   <QrCode className="h-24 w-24 text-[hsl(213,100%,18%)]" />
                 </div>
@@ -776,119 +781,6 @@ const RegisterForm = () => {
     );
   }
 
-  if (showMFASetup) {
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-start">
-          <Button type="button" variant="ghost" className="gap-2 px-0 text-[hsl(213,100%,18%)] hover:text-[hsl(213,100%,18%)]" onClick={handleBackFromMfa}>
-            <ArrowLeft className="h-4 w-4" /> Back to Security Step
-          </Button>
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Set Up Multi-Factor Authentication</h2>
-          <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Secure your account with MFA</p>
-        </div>
-
-        <Alert>
-          <CheckCircle2 className="h-4 w-4" />
-          <AlertDescription>
-            Account created successfully! Now let's secure it with MFA.
-          </AlertDescription>
-        </Alert>
-
-        {mfaMethod === "totp" ? (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Manual Entry Key</Label>
-              <Input
-                value="JBSWY3DPEHPK3PXP"
-                readOnly
-                className="font-mono text-center"
-              />
-              <p className="text-xs text-[hsl(0,0%,31%)]">
-                Use this if you can't scan the QR code from the badge.
-              </p>
-            </div>
-
-            <div className="bg-[hsl(25,95%,60%)]/10 border border-[hsl(25,95%,60%)]/20 p-4 rounded-lg space-y-2">
-              <h4 className="font-semibold text-sm">Backup Codes</h4>
-              <p className="text-xs text-[hsl(0,0%,31%)]">
-                Save these codes securely. Each can be used once if you lose access to your authenticator.
-              </p>
-              <div className="grid grid-cols-2 gap-2 mt-2 font-mono text-sm">
-                <code className="bg-white p-2 rounded">ABC-123-XYZ</code>
-                <code className="bg-white p-2 rounded">DEF-456-UVW</code>
-                <code className="bg-white p-2 rounded">GHI-789-RST</code>
-                <code className="bg-white p-2 rounded">JKL-012-OPQ</code>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <Alert>
-              <Smartphone className="h-4 w-4" />
-              <AlertDescription>
-                A 6-digit code will be sent to your registered mobile number: ***-***-{mobile.slice(-4)}
-              </AlertDescription>
-            </Alert>
-            <p className="text-sm text-[hsl(0,0%,31%)]">
-              You'll receive an SMS code every time you log in. Standard SMS charges may apply.
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="smsOtpSetup">Enter Verification Code</Label>
-              <Input
-                id="smsOtpSetup"
-                type="text"
-                inputMode="numeric"
-                pattern="\d*"
-                maxLength={6}
-                value={smsOtp}
-                onChange={(e) => handleSmsOtpChange(e.target.value)}
-                className="text-center text-2xl tracking-widest"
-                aria-invalid={Boolean(smsOtpError)}
-              />
-              {smsOtpError ? (
-                <p className="text-xs text-[hsl(0,84%,60%)]">{smsOtpError}</p>
-              ) : (
-                <p className="text-xs text-[hsl(0,0%,45%)]">Enter the OTP to confirm your mobile device.</p>
-              )}
-                <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={handleSendOtp}
-                    disabled={otpCountdown > 0}
-                  >
-                    {otpSent
-                      ? otpCountdown > 0
-                        ? `Resend in ${formatCountdown(otpCountdown)}`
-                        : "Resend OTP"
-                      : "Send OTP"}
-                  </Button>
-                  {otpSent && (
-                    <p
-                      className={`text-xs ${
-                        otpCountdown > 0
-                          ? "text-[hsl(122,39%,49%)]"
-                          : "text-[hsl(0,84%,60%)]"
-                      }`}
-                    >
-                      {otpCountdown > 0
-                        ? `OTP sent to ***-***-${mobile.slice(-4)}. Valid for ${formatCountdown(otpCountdown)}.`
-                        : "OTP expired. Tap resend to request a new code."}
-                    </p>
-                  )}
-                </div>
-            </div>
-          </div>
-        )}
-
-        <Button className="w-full" size="lg" onClick={handleCompleteMfaSetup}>
-          Complete Setup & Continue
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <TooltipProvider>
@@ -900,28 +792,50 @@ const RegisterForm = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {steps.map((step) => (
-            <div key={step.id} className="flex-1 flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${
-                currentStep >= step.id
-                  ? "bg-gradient-to-br from-[hsl(207,90%,54%)] to-[hsl(213,100%,18%)] text-white"
-                  : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
-              }`}>
-                {step.id}
+          {steps.map((step) => {
+            const isActive = currentStep === step.id;
+            const isComplete = currentStep > step.id;
+
+            return (
+              <div key={step.id} className="flex flex-1 items-center gap-3">
+                <div
+                  className={cn(
+                    "step-node w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold",
+                    isComplete || isActive
+                      ? "bg-gradient-to-br from-[hsl(207,90%,54%)] to-[hsl(213,100%,18%)] text-white"
+                      : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]",
+                    isActive && "step-node--active",
+                    isComplete && "step-node--complete"
+                  )}
+                >
+                  {step.id}
+                </div>
+                <div
+                  className={cn(
+                    "hidden md:block transition-all duration-300",
+                    isActive ? "opacity-100 translate-y-0" : isComplete ? "opacity-80 translate-y-[1px]" : "opacity-60 translate-y-[2px]"
+                  )}
+                >
+                  <p className="text-xs font-semibold text-[hsl(213,100%,18%)]">{step.title}</p>
+                  <p className="text-[10px] text-[hsl(0,0%,31%)]">{step.description}</p>
+                </div>
+                {step.id !== steps.length && (
+                  <div className="flex-1">
+                    <div className={cn("step-line", isComplete && "step-line--complete")}>
+                      <span
+                        className={cn(
+                          "step-line__progress",
+                          isComplete && "step-line__progress--filled",
+                          isActive && !isComplete && "step-line__progress--active"
+                        )}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="hidden md:block">
-                <p className="text-xs font-semibold text-[hsl(213,100%,18%)]">
-                  {step.title}
-                </p>
-                <p className="text-[10px] text-[hsl(0,0%,31%)]">
-                  {step.description}
-                </p>
-              </div>
-              {step.id !== steps.length && (
-                <div className={`flex-1 h-0.5 rounded ${currentStep > step.id ? "bg-[hsl(207,90%,54%)]" : "bg-[hsl(213,100%,18%)]/10"}`} />
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -1037,16 +951,19 @@ const RegisterForm = () => {
           </div>
 
           {roleSecurityMessages.length > 0 && (
-            <div className="bg-[hsl(210,40%,96.1%)] border border-[hsl(213,100%,18%)]/15 rounded-lg p-3 text-xs text-[hsl(0,0%,31%)] space-y-1">
-              <p className="font-semibold text-[hsl(213,100%,18%)] text-xs uppercase tracking-wide">
-                Role security notes
-              </p>
-              <ul className="space-y-1 list-disc list-inside">
-                {roleSecurityMessages.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </div>
+            <Collapsible>
+              <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-lg border border-[hsl(213,100%,18%)]/10 bg-[hsl(210,40%,96.1%)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[hsl(213,100%,18%)] transition hover:bg-[hsl(210,40%,94%)]">
+                <span>Role security notes</span>
+                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="border-x border-b border-[hsl(213,100%,18%)]/10 bg-[hsl(210,40%,96.1%)] px-4 py-3 text-xs text-[hsl(0,0%,31%)]">
+                <ul className="space-y-1 list-disc list-inside">
+                  {roleSecurityMessages.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           <Collapsible>
@@ -1222,12 +1139,85 @@ const RegisterForm = () => {
         </form>
       )}
 
-      <Alert>
-        <Shield className="h-4 w-4" />
-        <AlertDescription className="text-xs">
-          All registrations are verified. False information may result in legal action.
-        </AlertDescription>
-      </Alert>
+      {currentStep === 4 && showMFASetup && (
+        <div className="space-y-6">
+          {mfaMethod === "totp" ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Manual Entry Key</Label>
+                <Input value="JBSWY3DPEHPK3PXP" readOnly className="font-mono text-center" />
+                <p className="text-xs text-[hsl(0,0%,31%)]">Use this if you can't scan the QR code from the badge.</p>
+              </div>
+
+              <div className="bg-[hsl(25,95%,60%)]/10 border border-[hsl(25,95%,60%)]/20 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm">Backup Codes</h4>
+                <p className="text-xs text-[hsl(0,0%,31%)]">
+                  Save these codes securely. Each can be used once if you lose access to your authenticator.
+                </p>
+                <div className="grid grid-cols-2 gap-2 mt-2 font-mono text-sm">
+                  <code className="bg-white p-2 rounded">ABC-123-XYZ</code>
+                  <code className="bg-white p-2 rounded">DEF-456-UVW</code>
+                  <code className="bg-white p-2 rounded">GHI-789-RST</code>
+                  <code className="bg-white p-2 rounded">JKL-012-OPQ</code>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-[hsl(0,0%,31%)]">
+                You'll receive an SMS code every time you log in. Standard SMS charges may apply.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="smsOtpSetup">Enter Verification Code</Label>
+                <Input
+                  id="smsOtpSetup"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d*"
+                  maxLength={6}
+                  value={smsOtp}
+                  onChange={(e) => handleSmsOtpChange(e.target.value)}
+                  className="text-center text-2xl tracking-widest"
+                  aria-invalid={Boolean(smsOtpError)}
+                />
+                {smsOtpError ? (
+                  <p className="text-xs text-[hsl(0,84%,60%)]">{smsOtpError}</p>
+                ) : (
+                  <p className="text-xs text-[hsl(0,0%,45%)]">Enter the OTP to confirm your mobile device.</p>
+                )}
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <Button type="button" variant="secondary" onClick={handleSendOtp} disabled={otpCountdown > 0}>
+                    {otpSent ? (otpCountdown > 0 ? `Resend in ${formatCountdown(otpCountdown)}` : "Resend OTP") : "Send OTP"}
+                  </Button>
+                  {otpSent && (
+                    <p className={`text-xs ${otpCountdown > 0 ? "text-[hsl(122,39%,49%)]" : "text-[hsl(0,84%,60%)]"}`}>
+                      {otpCountdown > 0
+                        ? `OTP sent to ***-***-${mobile.slice(-4)}. Valid for ${formatCountdown(otpCountdown)}.`
+                        : "OTP expired. Tap resend to request a new code."}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Button className="w-full" size="lg" onClick={handleCompleteMfaSetup}>
+            Complete Setup & Continue
+          </Button>
+          <Button type="button" variant="outline" className="w-full" onClick={handleBackFromMfa}>
+            Return to Security Settings
+          </Button>
+        </div>
+      )}
+
+      {currentStep <= 2 && (
+        <Alert>
+          <Shield className="h-4 w-4" />
+          <AlertDescription className="text-xs">
+            All registrations are verified. False information may result in legal action.
+          </AlertDescription>
+        </Alert>
+      )}
       </div>
     </TooltipProvider>
   );
