@@ -3,9 +3,7 @@ export type RoleKey =
 	| "family"
 	| "veteran"
 	| "cert"
-	| "commander"
-	| "admin"
-	| "auditor";
+	| "admin";
 
 export interface RoleConfig {
 	idLabel: string;
@@ -21,7 +19,7 @@ export interface RoleConfig {
 	emailWarningMessage?: string;
 	emailWhitelist?: string[];
 	requiresMfa?: boolean;
-	enforcedMfaMethod?: "totp" | "sms";
+	enforcedMfaMethod?: "totp" | "email";
 	securityNotes?: string[];
 	passwordPolicy?: {
 		minLength: number;
@@ -32,25 +30,16 @@ export interface RoleConfig {
 	readOnlyRole?: boolean;
 }
 
-export const auditorWhitelist = [
-	"auditor@mod.gov.in",
-	"audit.ops@mod.gov.in",
-	"audit.ctrl@defence.in",
-];
-
-export const defenceEmailPattern = /^[a-z0-9._%+-]+@(?:army|navy|airforce|drdo)\.(?:mil|gov)\.in$/i;
-export const adminEmailPattern = /^[a-z0-9._%+-]+@(?:mod\.gov\.in|defence\.in)$/i;
+export const defenceEmailPattern = /^[a-z0-9._%+-]+@(?:army|navy|airforce|drdo)\.(?:mil|gov)\.in$|^[a-z0-9._%+-]+@(?:gov|nic)\.in$/i;
+export const adminEmailPattern = /^[a-z0-9._%+-]+@(?:mod\.gov\.in|defence\.in|gov\.in|nic\.in)$/i;
 export const modCredentialPattern = /^MOD-[A-Z]{2,4}-\d{4}$/;
-export const auditorCredentialPattern = /^AUD-[A-Z]{2,5}-\d{3,}$/;
 
 export const roleOptions: { value: RoleKey; label: string }[] = [
 	{ value: "personnel", label: "Defence Personnel" },
 	{ value: "family", label: "Family Member / Dependent" },
 	{ value: "veteran", label: "Veteran / Retired Officer" },
 	{ value: "cert", label: "CERT Analyst" },
-	{ value: "commander", label: "Commander" },
 	{ value: "admin", label: "Admin / MoD Authority" },
-	{ value: "auditor", label: "Auditor" },
 ];
 
 export const roleConfigurations: Record<RoleKey, RoleConfig> = {
@@ -86,12 +75,12 @@ export const roleConfigurations: Record<RoleKey, RoleConfig> = {
 	},
 	veteran: {
 		idLabel: "SPARSH / Pension ID",
-		placeholder: "e.g., SPARSH-7654321",
-		tooltip: "Enter your SPARSH or Pension ID.",
-		idPattern: /^(?:SPARSH|PEN)-?\d{6,8}$/i,
+		placeholder: "e.g., 7654321",
+		tooltip: "Enter your SPARSH ID or Pension ID (numeric only, 6-12 digits).",
+		idPattern: /^\d{6,12}$/,
 		idValidationMessage:
-			"ID must begin with SPARSH or PEN and include 6-8 digits (hyphen optional).",
-		enforceUppercase: true,
+			"SPARSH/Pension ID must be 6-12 digits (numbers only).",
+		enforceUppercase: false,
 		requiresDefenceEmail: true,
 		emailPattern: defenceEmailPattern,
 		emailErrorMessage:
@@ -116,25 +105,6 @@ export const roleConfigurations: Record<RoleKey, RoleConfig> = {
 			"All actions logged within CERT audit trail.",
 		],
 	},
-	commander: {
-		idLabel: "Command ID / Service ID",
-		placeholder: "e.g., CMD-AF-101",
-		tooltip: "Command ID prefixes include CMD, CO, HQ. Ensure correct unit suffix.",
-		idPattern: /^(?:CMD|CO|HQ)(?:-[A-Z]{1,3})*-?\d{2,}$/i,
-		idValidationMessage:
-			"Command IDs must start with CMD, CO, or HQ and end with digits (unit codes optional).",
-		enforceUppercase: true,
-		requiresDefenceEmail: true,
-		emailPattern: defenceEmailPattern,
-		emailErrorMessage: "Command-level access requires a verified defence email.",
-		requiresMfa: true,
-		enforcedMfaMethod: "totp",
-		highPrivilege: true,
-		securityNotes: [
-			"High-privilege access flagged for realtime monitoring.",
-			"Authenticator-based MFA enforced on every login.",
-		],
-	},
 	admin: {
 		idLabel: "MOD Credential ID",
 		placeholder: "e.g., MOD-HQ-2045",
@@ -156,26 +126,6 @@ export const roleConfigurations: Record<RoleKey, RoleConfig> = {
 		securityNotes: [
 			"Strict password policy enforced (12+ chars, special character).",
 			"MFA mandatory. Session is privileged.",
-		],
-	},
-	auditor: {
-		idLabel: "Audit Credential ID",
-		placeholder: "e.g., AUD-CTRL-302",
-		tooltip: "Issued with read-only audit accounts. Format: AUD-TEAM-###.",
-		idPattern: auditorCredentialPattern,
-		idValidationMessage: "Credential ID must follow AUD-TEAM-### with an approved team code.",
-		enforceUppercase: true,
-		requiresDefenceEmail: true,
-		emailPattern: adminEmailPattern,
-		emailErrorMessage:
-			"Auditor email must match approved defence domains and whitelist.",
-		emailWhitelist: auditorWhitelist,
-		requiresMfa: true,
-		enforcedMfaMethod: "totp",
-		readOnlyRole: true,
-		securityNotes: [
-			"Access is read-only; activity monitored.",
-			"Email must match approved auditor roster.",
 		],
 	},
 };

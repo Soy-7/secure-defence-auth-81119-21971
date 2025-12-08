@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { LucideIcon } from "lucide-react";
-import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info, Eye, EyeOff, ArrowLeft, Users, Medal, Radar, Star, Cpu, Search, ChevronDown } from "lucide-react";
+import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info, Eye, EyeOff, ArrowLeft, Users, Medal, Radar, Cpu, ChevronDown } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -28,9 +28,7 @@ const roleAvatarIconMap: Record<RoleKey, LucideIcon> = {
   family: Users,
   veteran: Medal,
   cert: Radar,
-  commander: Star,
   admin: Cpu,
-  auditor: Search,
 };
 
 const RegisterForm = () => {
@@ -40,13 +38,13 @@ const RegisterForm = () => {
   const [userType, setUserType] = useState<RoleKey | "">("");
   const [serviceId, setServiceId] = useState("");
   const [serviceIdError, setServiceIdError] = useState("");
-  const [mfaMethod, setMfaMethod] = useState<"totp" | "sms">("totp");
+  const [mfaMethod, setMfaMethod] = useState<"totp" | "email">("totp");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [activationPassword, setActivationPassword] = useState("");
   const [activationPasswordError, setActivationPasswordError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [smsOtp, setSmsOtp] = useState("");
-  const [smsOtpError, setSmsOtpError] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+  const [emailOtpError, setEmailOtpError] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpCountdown, setOtpCountdown] = useState(0);
   const otpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -199,7 +197,7 @@ const RegisterForm = () => {
                     <div className="flex items-start justify-between gap-6">
                       <div className="space-y-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-[hsl(213,100%,18%)]/55">
-                          Defence Cyber Command
+                          Defence Incident Sentinel 
                         </p>
                         <div>
                           <p className="text-2xl font-semibold leading-tight tracking-wide">
@@ -324,22 +322,22 @@ const RegisterForm = () => {
   };
 
   const handleSendOtp = () => {
-    if (!mobile || mobile.length < 10) {
+    if (!email || !email.trim()) {
       toast({
-        title: "Update Mobile Number",
-        description: "Enter a valid mobile number in Step 1 so we can deliver the OTP.",
+        title: "Update Email Address",
+        description: "Enter a valid email address in Step 1 so we can deliver the OTP.",
         variant: "destructive",
       });
       return;
     }
 
-    setSmsOtp("");
-    setSmsOtpError("");
+    setEmailOtp("");
+    setEmailOtpError("");
     setOtpSent(true);
     startOtpCountdown();
     toast({
       title: "OTP Sent",
-      description: `A one-time code has been dispatched to ***-***-${mobile.slice(-4)}.`,
+      description: `A one-time code has been dispatched to ${email}.`,
     });
   };
 
@@ -411,12 +409,12 @@ const RegisterForm = () => {
     setServiceIdError("");
     setActivationPassword("");
     setActivationPasswordError("");
-  setShowPassword(false);
-  setSmsOtp("");
-  setSmsOtpError("");
-  clearOtpTimer();
-  setOtpSent(false);
-  setOtpCountdown(0);
+    setShowPassword(false);
+    setEmailOtp("");
+    setEmailOtpError("");
+    clearOtpTimer();
+    setOtpSent(false);
+    setOtpCountdown(0);
     evaluateEmailAgainstRole(roleConfigurations[roleKey], undefined, roleKey);
     const enforcedMethod = roleConfigurations[roleKey]?.enforcedMfaMethod;
     setMfaMethod(enforcedMethod ?? "totp");
@@ -432,19 +430,19 @@ const RegisterForm = () => {
 
   const handleMfaMethodChange = (value: string) => {
     if (currentRoleConfig?.enforcedMfaMethod) {
-      setMfaMethod(currentRoleConfig.enforcedMfaMethod);
+      setMfaMethod(currentRoleConfig.enforcedMfaMethod as "totp" | "email");
       return;
     }
 
-    setMfaMethod(value === "sms" ? "sms" : "totp");
-    if (value === "sms") {
-      setSmsOtp("");
-      setSmsOtpError("");
+    setMfaMethod(value === "email" ? "email" : "totp");
+    if (value === "email") {
+      setEmailOtp("");
+      setEmailOtpError("");
       setOtpSent(false);
       setOtpCountdown(0);
     } else {
-      setSmsOtp("");
-      setSmsOtpError("");
+      setEmailOtp("");
+      setEmailOtpError("");
       clearOtpTimer();
       setOtpSent(false);
       setOtpCountdown(0);
@@ -458,11 +456,11 @@ const RegisterForm = () => {
     }
   };
 
-  const handleSmsOtpChange = (rawValue: string) => {
+  const handleEmailOtpChange = (rawValue: string) => {
     const cleaned = rawValue.replace(/\D/g, "").slice(0, 6);
-    setSmsOtp(cleaned);
-    if (smsOtpError) {
-      setSmsOtpError("");
+    setEmailOtp(cleaned);
+    if (emailOtpError) {
+      setEmailOtpError("");
     }
   };
 
@@ -535,7 +533,7 @@ const RegisterForm = () => {
   }, [currentRoleConfig?.enforcedMfaMethod, mfaMethod]);
 
   useEffect(() => {
-    if (!showMFASetup || mfaMethod !== "sms") {
+    if (!showMFASetup || mfaMethod !== "email") {
       clearOtpTimer();
       setOtpSent(false);
       setOtpCountdown(0);
@@ -671,10 +669,10 @@ const RegisterForm = () => {
   };
 
   const handleCompleteMfaSetup = () => {
-    if (mfaMethod === "sms") {
+    if (mfaMethod === "email") {
       if (!otpSent) {
-        const message = "Send the OTP to your device before completing setup.";
-        setSmsOtpError(message);
+        const message = "Send the OTP to your email before completing setup.";
+        setEmailOtpError(message);
         toast({
           title: "Send OTP",
           description: message,
@@ -685,7 +683,7 @@ const RegisterForm = () => {
 
       if (otpCountdown === 0) {
         const message = "Your OTP expired. Resend a new code to continue.";
-        setSmsOtpError(message);
+        setEmailOtpError(message);
         toast({
           title: "OTP Expired",
           description: message,
@@ -694,11 +692,11 @@ const RegisterForm = () => {
         return;
       }
 
-      if (smsOtp.length !== 6) {
-        const message = "Enter the 6-digit code we just sent to your mobile number.";
-        setSmsOtpError(message);
+      if (emailOtp.length !== 6) {
+        const message = "Enter the 6-digit code we just sent to your email.";
+        setEmailOtpError(message);
         toast({
-          title: "Verify SMS Code",
+          title: "Verify Email Code",
           description: message,
           variant: "destructive",
         });
@@ -707,8 +705,8 @@ const RegisterForm = () => {
     }
 
     clearOtpTimer();
-    setSmsOtp("");
-    setSmsOtpError("");
+    setEmailOtp("");
+    setEmailOtpError("");
     setOtpSent(false);
     setOtpCountdown(0);
     toast({
@@ -719,8 +717,8 @@ const RegisterForm = () => {
 
   const handleBackFromMfa = () => {
     clearOtpTimer();
-    setSmsOtp("");
-    setSmsOtpError("");
+    setEmailOtp("");
+    setEmailOtpError("");
     setOtpSent(false);
     setOtpCountdown(0);
     setShowMFASetup(false);
@@ -870,7 +868,7 @@ const RegisterForm = () => {
             <Input
               id="email"
               type="email"
-              placeholder="yourname@army.mil.in"
+              placeholder="yourname@gov.in"
               value={email}
               onChange={(e) => handleEmailChange(e.target.value)}
             />
@@ -1031,21 +1029,21 @@ const RegisterForm = () => {
 
               <button
                 type="button"
-                onClick={() => handleMfaMethodChange("sms")}
+                onClick={() => handleMfaMethodChange("email")}
                 className={`rounded-lg border p-4 text-left transition shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(213,100%,18%)] ${
-                  mfaMethod === "sms"
+                  mfaMethod === "email"
                     ? "border-[hsl(213,100%,18%)] bg-[hsl(210,40%,96.1%)]"
                     : "border-[hsl(213,100%,18%)]/20 bg-white"
                 } ${currentRoleConfig?.enforcedMfaMethod === "totp" ? "opacity-60 cursor-not-allowed" : "hover:shadow-md"}`}
                 role="radio"
-                aria-checked={mfaMethod === "sms"}
+                aria-checked={mfaMethod === "email"}
                 aria-disabled={currentRoleConfig?.enforcedMfaMethod === "totp"}
                 disabled={currentRoleConfig?.enforcedMfaMethod === "totp"}
               >
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      mfaMethod === "sms"
+                      mfaMethod === "email"
                         ? "bg-[hsl(213,100%,18%)] text-white"
                         : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
                     }`}
@@ -1053,8 +1051,8 @@ const RegisterForm = () => {
                     <Smartphone className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="font-semibold text-[hsl(213,100%,18%)]">SMS OTP</p>
-                    <p className="text-xs text-[hsl(0,0%,45%)]">Receive one-time codes on your registered device.</p>
+                    <p className="font-semibold text-[hsl(213,100%,18%)]">Email OTP</p>
+                    <p className="text-xs text-[hsl(0,0%,30%)]">Receive one-time codes via your registered email.</p>
                   </div>
                 </div>
               </button>
@@ -1149,6 +1147,27 @@ const RegisterForm = () => {
                 <p className="text-xs text-[hsl(0,0%,31%)]">Use this if you can't scan the QR code from the badge.</p>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="totpCode">Enter Authenticator Code</Label>
+                <Input
+                  id="totpCode"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d*"
+                  placeholder="000000"
+                  maxLength={6}
+                  value={emailOtp}
+                  onChange={(e) => handleEmailOtpChange(e.target.value)}
+                  className="text-center text-2xl tracking-widest"
+                  aria-invalid={Boolean(emailOtpError)}
+                />
+                {emailOtpError ? (
+                  <p className="text-xs text-[hsl(0,84%,60%)]">{emailOtpError}</p>
+                ) : (
+                  <p className="text-xs text-[hsl(0,0%,24%)]">Enter the 6-digit code from your authenticator app.</p>
+                )}
+              </div>
+
               <div className="bg-[hsl(25,95%,60%)]/10 border border-[hsl(25,95%,60%)]/20 p-4 rounded-lg space-y-2">
                 <h4 className="font-semibold text-sm">Backup Codes</h4>
                 <p className="text-xs text-[hsl(0,0%,31%)]">
@@ -1164,26 +1183,24 @@ const RegisterForm = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-sm text-[hsl(0,0%,31%)]">
-                You'll receive an SMS code every time you log in. Standard SMS charges may apply.
-              </p>
+              <p className="text-sm text-[hsl(0,0%,24%)]">You'll receive an email with a one-time code for MFA.</p>
               <div className="space-y-2">
-                <Label htmlFor="smsOtpSetup">Enter Verification Code</Label>
+                <Label htmlFor="emailOtpSetup">Enter Verification Code</Label>
                 <Input
-                  id="smsOtpSetup"
+                  id="emailOtpSetup"
                   type="text"
                   inputMode="numeric"
                   pattern="\d*"
                   maxLength={6}
-                  value={smsOtp}
-                  onChange={(e) => handleSmsOtpChange(e.target.value)}
+                  value={emailOtp}
+                  onChange={(e) => handleEmailOtpChange(e.target.value)}
                   className="text-center text-2xl tracking-widest"
-                  aria-invalid={Boolean(smsOtpError)}
+                  aria-invalid={Boolean(emailOtpError)}
                 />
-                {smsOtpError ? (
-                  <p className="text-xs text-[hsl(0,84%,60%)]">{smsOtpError}</p>
+                {emailOtpError ? (
+                  <p className="text-xs text-[hsl(0,84%,60%)]">{emailOtpError}</p>
                 ) : (
-                  <p className="text-xs text-[hsl(0,0%,45%)]">Enter the OTP to confirm your mobile device.</p>
+                  <p className="text-xs text-[hsl(0,0%,24%)]">Enter the OTP to confirm your email address.</p>
                 )}
                 <div className="flex flex-wrap items-center gap-3 pt-1">
                   <Button type="button" variant="secondary" onClick={handleSendOtp} disabled={otpCountdown > 0}>
@@ -1192,7 +1209,7 @@ const RegisterForm = () => {
                   {otpSent && (
                     <p className={`text-xs ${otpCountdown > 0 ? "text-[hsl(122,39%,49%)]" : "text-[hsl(0,84%,60%)]"}`}>
                       {otpCountdown > 0
-                        ? `OTP sent to ***-***-${mobile.slice(-4)}. Valid for ${formatCountdown(otpCountdown)}.`
+                        ? `OTP sent to ${email}. Valid for ${formatCountdown(otpCountdown)}.`
                         : "OTP expired. Tap resend to request a new code."}
                     </p>
                   )}

@@ -25,7 +25,7 @@ const formatCountdown = (seconds: number) => {
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
-  const [mfaMethod, setMfaMethod] = useState<"totp" | "sms">("totp");
+  const [mfaMethod, setMfaMethod] = useState<"totp" | "email">("totp");
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(60);
@@ -39,8 +39,6 @@ const LoginForm = () => {
   const [emailError, setEmailError] = useState("");
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [phoneError, setPhoneError] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpCountdown, setOtpCountdown] = useState(0);
@@ -70,8 +68,6 @@ const LoginForm = () => {
     setEmail("");
     setEmailError("");
     setPasswordError("");
-    setPhoneNumber("");
-    setPhoneError("");
     const enforcedMethod = roleConfigurations[roleKey]?.enforcedMfaMethod;
     setMfaMethod(enforcedMethod ?? "totp");
   };
@@ -98,19 +94,6 @@ const LoginForm = () => {
     }
   };
 
-  const handlePhoneChange = (value: string) => {
-    const digitsOnly = value.replace(/\D/g, "").slice(0, 15);
-    setPhoneNumber(digitsOnly);
-    if (phoneError) {
-      setPhoneError("");
-    }
-    if (otpSent) {
-      clearOtpTimer();
-      setOtpSent(false);
-      setOtpCountdown(0);
-    }
-  };
-
   const clearOtpTimer = () => {
     if (otpTimerRef.current) {
       clearInterval(otpTimerRef.current);
@@ -133,40 +116,39 @@ const LoginForm = () => {
   };
 
   const handleSendOtp = () => {
-    if (phoneNumber.length < 10) {
-      setPhoneError("Enter a valid phone number (10-15 digits).");
+    if (!email || !email.trim()) {
+      setEmailError("Email is required to receive OTP.");
       toast({
-        title: "Phone number required",
-        description: "Provide a reachable contact number for OTP delivery.",
+        title: "Email required",
+        description: "Provide a valid email address for OTP delivery.",
         variant: "destructive",
       });
       return;
     }
 
-    setPhoneError("");
+    setEmailError("");
     setOtpSent(true);
     setOtpCode("");
     startOtpCountdown();
     toast({
       title: "OTP Sent",
-      description: `A one-time code has been dispatched to ***-***-${phoneNumber.slice(-4)}.`,
+      description: `A one-time code has been dispatched to ${email}.`,
     });
   };
 
   const handleMfaMethodChange = (value: string) => {
     if (currentRoleConfig?.enforcedMfaMethod) {
-      setMfaMethod(currentRoleConfig.enforcedMfaMethod);
+      setMfaMethod(currentRoleConfig.enforcedMfaMethod as "totp" | "email");
       return;
     }
 
-    setMfaMethod(value === "sms" ? "sms" : "totp");
-    if (value === "sms") {
+    setMfaMethod(value === "email" ? "email" : "totp");
+    if (value === "email") {
       clearOtpTimer();
       setOtpSent(false);
       setOtpCountdown(0);
       setOtpCode("");
     } else {
-      setPhoneError("");
       clearOtpTimer();
       setOtpSent(false);
       setOtpCountdown(0);
@@ -234,7 +216,7 @@ const LoginForm = () => {
   }, [currentRoleConfig?.enforcedMfaMethod, mfaMethod]);
 
   useEffect(() => {
-    if (mfaMethod !== "sms") {
+    if (mfaMethod !== "email") {
       clearOtpTimer();
       setOtpSent(false);
       setOtpCountdown(0);
@@ -452,12 +434,12 @@ const LoginForm = () => {
   const handleMFAVerify = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (mfaMethod === "sms") {
-      if (phoneNumber.length < 10) {
-        setPhoneError("Enter a valid phone number (10-15 digits).");
+    if (mfaMethod === "email") {
+      if (!email || !email.trim()) {
+        setEmailError("Email is required to receive OTP.");
         toast({
-          title: "Phone number required",
-          description: "Provide a reachable contact number for OTP fallback.",
+          title: "Email required",
+          description: "Provide a valid email address for OTP delivery.",
           variant: "destructive",
         });
         return;
@@ -583,30 +565,28 @@ const LoginForm = () => {
 
               <button
                 type="button"
-                onClick={() => handleMfaMethodChange("sms")}
+                onClick={() => handleMfaMethodChange("email")}
                 className={`rounded-lg border p-4 text-left transition shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(213,100%,18%)] ${
-                  mfaMethod === "sms"
+                  mfaMethod === "email"
                     ? "border-[hsl(213,100%,18%)] bg-[hsl(210,40%,96.1%)]"
                     : "border-[hsl(213,100%,18%)]/20 bg-white"
                 } ${currentRoleConfig?.enforcedMfaMethod === "totp" ? "opacity-60 cursor-not-allowed" : "hover:shadow-md"}`}
                 role="radio"
-                aria-checked={mfaMethod === "sms"}
+                aria-checked={mfaMethod === "email"}
                 aria-disabled={currentRoleConfig?.enforcedMfaMethod === "totp"}
                 disabled={currentRoleConfig?.enforcedMfaMethod === "totp"}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    mfaMethod === "sms"
+                    mfaMethod === "email"
                       ? "bg-[hsl(213,100%,18%)] text-white"
                       : "bg-[hsl(213,100%,18%)]/10 text-[hsl(213,100%,18%)]"
                   }`}>
                     <Smartphone className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="font-semibold text-[hsl(213,100%,18%)]">SMS OTP</p>
-                    <p className="text-xs text-[hsl(0,0%,45%)]">
-                      Receive one-time codes on your registered device.
-                    </p>
+                    <p className="font-semibold text-[hsl(213,100%,18%)]">Email OTP</p>
+                    <p className="text-xs text-[hsl(0,0%,30%)]">Receive one-time codes via email.</p>
                   </div>
                 </div>
               </button>
@@ -618,25 +598,20 @@ const LoginForm = () => {
             )}
           </div>
 
-          {mfaMethod === "sms" && (
+          {mfaMethod === "email" && (
             <div className="space-y-2">
-              <Label htmlFor="phone">Registered Phone Number</Label>
+              <Label htmlFor="emailOtp">Enter OTP Code</Label>
               <Input
-                id="phone"
-                type="tel"
-                placeholder="e.g., +91 9876543210"
-                value={phoneNumber}
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                maxLength={15}
-                aria-invalid={Boolean(phoneError)}
+                id="emailOtp"
+                type="text"
+                inputMode="numeric"
+                pattern="\d*"
+                placeholder="000000"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               />
-              {phoneError ? (
-                <p className="text-xs text-[hsl(0,84%,60%)]">{phoneError}</p>
-              ) : (
-                <p className="text-xs text-[hsl(0,0%,45%)]">
-                  Provide a reachable number for SMS delivery.
-                </p>
-              )}
+              <p className="text-xs text-[hsl(0,0%,24%)]">Check your email for the 6-digit code.</p>
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Button
                   type="button"
@@ -659,7 +634,7 @@ const LoginForm = () => {
                     }`}
                   >
                     {otpCountdown > 0
-                      ? `OTP sent to ***-***-${phoneNumber.slice(-4)}. Valid for ${formatCountdown(otpCountdown)}.`
+                      ? `OTP sent to ${email}. Valid for ${formatCountdown(otpCountdown)}.`
                       : "OTP expired. Tap resend to get a fresh code."}
                   </p>
                 )}
@@ -667,25 +642,23 @@ const LoginForm = () => {
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="otp">
-              {mfaMethod === "totp" ? "Authenticator Code" : "SMS Code"}
-            </Label>
-            <Input
-              id="otp"
-              type="text"
-              placeholder="Enter 6-digit code"
-              maxLength={6}
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-              className="text-center text-2xl tracking-widest"
-            />
-            <p className="text-xs text-[hsl(0,0%,31%)]">
-              {mfaMethod === "totp"
-                ? "Enter the code from your authenticator app"
-                : `Enter the code we just sent to your device`}
-            </p>
-          </div>
+          {mfaMethod === "totp" && (
+            <div className="space-y-2">
+              <Label htmlFor="otp">Authenticator Code</Label>
+              <Input
+                id="otp"
+                type="text"
+                placeholder="Enter 6-digit code"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                className="text-center text-2xl tracking-widest"
+              />
+              <p className="text-xs text-[hsl(0,0%,24%)]">
+                Enter the code from your authenticator app
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <input type="checkbox" id="remember" className="rounded" />
@@ -716,7 +689,7 @@ const LoginForm = () => {
       <div className="space-y-6">
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Sign in to Defence Cyber Portal</h2>
+            <h2 className="text-2xl font-bold text-[hsl(213,100%,18%)]">Sign in to Defence Incident Sentinell</h2>
             <p className="text-sm text-[hsl(0,0%,31%)] mt-2">Complete the secure login steps</p>
           </div>
 
@@ -857,7 +830,7 @@ const LoginForm = () => {
                   <Input
                     id="officialEmail"
                     type="email"
-                    placeholder={currentRoleConfig?.inputType === "email" ? currentRoleConfig.placeholder : "yourname@army.mil.in"}
+                    placeholder={currentRoleConfig?.inputType === "email" ? currentRoleConfig.placeholder : "yourname@gov.in"}
                     value={email}
                     onChange={(e) => handleEmailChange(e.target.value)}
                     autoComplete="off"
