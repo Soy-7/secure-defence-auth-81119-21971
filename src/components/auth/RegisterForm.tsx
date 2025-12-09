@@ -80,6 +80,13 @@ const RegisterForm = () => {
   const [totpCode, setTotpCode] = useState("");
   const [totpError, setTotpError] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  // Email verification for Step 1
+  const [emailVerificationOtp, setEmailVerificationOtp] = useState("");
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [emailVerificationCountdown, setEmailVerificationCountdown] = useState(0);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [emailVerificationError, setEmailVerificationError] = useState("");
+  const emailVerificationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
 
   const steps = [
@@ -372,6 +379,90 @@ const RegisterForm = () => {
     });
   };
 
+  // Email Verification Functions for Step 1
+  const clearEmailVerificationTimer = () => {
+    if (emailVerificationTimerRef.current) {
+      clearInterval(emailVerificationTimerRef.current);
+      emailVerificationTimerRef.current = null;
+    }
+  };
+
+  const startEmailVerificationCountdown = () => {
+    clearEmailVerificationTimer();
+    setEmailVerificationCountdown(60);
+    emailVerificationTimerRef.current = setInterval(() => {
+      setEmailVerificationCountdown((prev) => {
+        if (prev <= 1) {
+          clearEmailVerificationTimer();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendEmailVerification = () => {
+    if (!email || !email.trim()) {
+      toast({
+        title: "Email Required",
+        description: "Enter your email address first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEmailVerificationOtp("");
+    setEmailVerificationError("");
+    setEmailVerificationSent(true);
+    setIsEmailVerified(false);
+    startEmailVerificationCountdown();
+    toast({
+      title: "Verification Code Sent",
+      description: `A 6-digit verification code has been sent to ${email}.`,
+    });
+  };
+
+  const handleVerifyEmail = () => {
+    if (emailVerificationOtp.length !== 6) {
+      setEmailVerificationError("Enter the 6-digit code sent to your email.");
+      return;
+    }
+
+    if (emailVerificationCountdown === 0) {
+      setEmailVerificationError("Code expired. Please request a new one.");
+      return;
+    }
+
+    // Mock verification - in production, verify against backend
+    // For demo, accept any 6-digit code
+    clearEmailVerificationTimer();
+    setIsEmailVerified(true);
+    setEmailVerificationError("");
+    toast({
+      title: "Email Verified",
+      description: "Your email has been successfully verified.",
+    });
+  };
+
+  const handleEmailVerificationOtpChange = (value: string) => {
+    const cleaned = value.replace(/\D/g, "").slice(0, 6);
+    setEmailVerificationOtp(cleaned);
+    if (emailVerificationError) {
+      setEmailVerificationError("");
+    }
+  };
+
   const computeNormalizedId = (value: string, config?: RoleConfig) => {
     if (!config) {
       return value.trim();
@@ -431,6 +522,15 @@ const RegisterForm = () => {
   const handleEmailChange = (value: string) => {
     setEmail(value);
     evaluateEmailAgainstRole(currentRoleConfig, value, userType || undefined);
+    // Reset email verification when email changes
+    if (isEmailVerified || emailVerificationSent) {
+      setIsEmailVerified(false);
+      setEmailVerificationSent(false);
+      setEmailVerificationOtp("");
+      setEmailVerificationError("");
+      clearEmailVerificationTimer();
+      setEmailVerificationCountdown(0);
+    }
   };
 
   const handleRoleChange = (value: string) => {
@@ -573,6 +673,9 @@ const RegisterForm = () => {
 
   useEffect(() => () => clearOtpTimer(), []);
 
+  // Cleanup email verification timer on unmount
+  useEffect(() => () => clearEmailVerificationTimer(), []);
+
   const handleIdentityStep = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -589,6 +692,15 @@ const RegisterForm = () => {
       toast({
         title: "Invalid Mobile Number",
         description: "Please enter a valid mobile number (10-15 digits).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isEmailVerified) {
+      toast({
+        title: "Email Verification Required",
+        description: "Please verify your email address before continuing.",
         variant: "destructive",
       });
       return;
@@ -1066,20 +1178,108 @@ const RegisterForm = () => {
               placeholder="yourname@gov.in"
               value={email}
               onChange={(e) => handleEmailChange(e.target.value)}
+              disabled={isEmailVerified}
             />
             {emailError ? (
               <p className="text-xs text-[hsl(0,84%,60%)]">{emailError}</p>
             ) : emailWarning ? (
               <p className="text-xs text-[hsl(25,95%,60%)]">{emailWarning}</p>
-            ) : email ? (
+            ) : isEmailVerified ? (
               <p className="text-xs text-[hsl(122,39%,49%)] flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                Email domain verified
+                Email verified successfully
+              </p>
+            ) : email ? (
+              <p className="text-xs text-[hsl(0,0%,45%)]">
+                You'll need to verify this email before continuing.
               </p>
             ) : null}
           </div>
 
-          <Button type="submit" className="w-full" size="lg">
+          {/* Email Verification Section */}
+          {email && !isEmailVerified && (
+            <div className="space-y-3 p-4 bg-[hsl(210,40%,96.1%)] rounded-lg border border-[hsl(213,100%,18%)]/10">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold text-[hsl(213,100%,18%)]">Verify Your Email</Label>
+                {emailVerificationSent && emailVerificationCountdown > 0 && (
+                  <span className="text-xs text-[hsl(122,39%,49%)]">
+                    Code expires in {formatCountdown(emailVerificationCountdown)}
+                  </span>
+                )}
+              </div>
+              
+              {!emailVerificationSent ? (
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={handleSendEmailVerification}
+                  className="w-full"
+                >
+                  Send Verification Code
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="emailVerificationOtp">Enter 6-Digit Code</Label>
+                    <Input
+                      id="emailVerificationOtp"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      placeholder="000000"
+                      maxLength={6}
+                      value={emailVerificationOtp}
+                      onChange={(e) => handleEmailVerificationOtpChange(e.target.value)}
+                      className="text-center text-2xl tracking-widest"
+                      aria-invalid={Boolean(emailVerificationError)}
+                    />
+                    {emailVerificationError && (
+                      <p className="text-xs text-[hsl(0,84%,60%)]">{emailVerificationError}</p>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleSendEmailVerification}
+                      disabled={emailVerificationCountdown > 0}
+                      className="flex-1"
+                    >
+                      {emailVerificationCountdown > 0 
+                        ? `Resend in ${formatCountdown(emailVerificationCountdown)}` 
+                        : "Resend Code"}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleVerifyEmail}
+                      disabled={emailVerificationOtp.length !== 6}
+                      className="flex-1"
+                    >
+                      Verify Email
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Verified Email Confirmation */}
+          {isEmailVerified && (
+            <Alert className="bg-[hsl(122,39%,49%)]/10 border-[hsl(122,39%,49%)]/20">
+              <CheckCircle2 className="h-4 w-4 text-[hsl(122,39%,49%)]" />
+              <AlertDescription className="text-[hsl(122,39%,49%)]">
+                Your email has been verified. You can now continue to the next step.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <Button 
+            type="submit" 
+            className="w-full" 
+            size="lg"
+            disabled={!isEmailVerified}
+          >
             Continue to Service Details
           </Button>
         </form>
