@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { LucideIcon } from "lucide-react";
-import { Shield, Smartphone, CheckCircle2, Clock, QrCode, Info, Eye, EyeOff, ArrowLeft, Users, Medal, Radar, Cpu, ChevronDown } from "lucide-react";
+import { Shield, Smartphone, CheckCircle2, Clock, Info, Eye, EyeOff, ArrowLeft, Users, Medal, Radar, Cpu, ChevronDown } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -12,6 +12,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { roleConfigurations, roleOptions, RoleKey, RoleConfig, defenceEmailPattern } from "@/lib/roleConfig";
 import { cn } from "@/lib/utils";
 import { useAuthPreview } from "./AuthLayout";
+import { setupTotp, verifyTotpToken, generateBackupCodes } from "@/lib/auth/totpService";
+import type { TotpSetup } from "@/lib/auth/totpService";
 import "./register-preview.css";
 import "./auth-stepper.css";
 
@@ -55,6 +57,10 @@ const RegisterForm = () => {
   const [showMFASetup, setShowMFASetup] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [emailWarning, setEmailWarning] = useState("");
+  const [totpSetup, setTotpSetup] = useState<TotpSetup | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+  const [totpError, setTotpError] = useState("");
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const { toast } = useToast();
 
   const steps = [
@@ -242,9 +248,15 @@ const RegisterForm = () => {
                 style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
               >
                 <div className={`generate-overlay ${isVerifying ? "generate-overlay--verifying" : ""}`} aria-hidden="true" />
-                <div className="flex h-36 w-36 items-center justify-center rounded-2xl border border-[hsl(213,100%,18%)]/20 bg-[hsl(213,100%,18%)]/5">
-                  <QrCode className="h-24 w-24 text-[hsl(213,100%,18%)]" />
-                </div>
+                {totpSetup && isTotpSetupActive && (
+                  <div className="flex items-center justify-center">
+                    <img 
+                      src={totpSetup.qrCodeDataUrl} 
+                      alt="TOTP QR Code" 
+                      className="w-48 h-48 rounded-lg shadow-lg"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -255,7 +267,7 @@ const RegisterForm = () => {
           </p>
         ) : isTotpSetupActive ? (
           <p className="text-[11px] text-[hsl(213,100%,18%)]/65 max-w-[260px]">
-            Scan this badge with your authenticator app. Codes refresh every 30 seconds.
+            Scan the QR code with your authenticator app. Codes refresh every 30 seconds.
           </p>
         ) : (
           <p className="text-[11px] text-[hsl(213,100%,18%)]/65">
@@ -649,11 +661,29 @@ const RegisterForm = () => {
     setCurrentStep(4);
 
     // Simulate verification process
-    setTimeout(() => {
+    setTimeout(async () => {
       const isDefenceEmail = defenceEmailPattern.test(email.toLowerCase());
       setIsVerified(isDefenceEmail);
 
       if (isDefenceEmail) {
+        // Generate TOTP setup if TOTP method is selected
+        if (mfaMethod === "totp") {
+          try {
+            const setup = await setupTotp(email, "SecureDefence");
+            const codes = generateBackupCodes(10);
+            setTotpSetup(setup);
+            setBackupCodes(codes);
+          } catch (error) {
+            console.error("Error setting up TOTP:", error);
+            toast({
+              title: "Setup Error",
+              description: "Failed to generate authenticator setup. Please try again.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+        
         toast({
           title: "Verification Successful",
           description: "Your Defence credentials have been verified.",
@@ -669,6 +699,51 @@ const RegisterForm = () => {
   };
 
   const handleCompleteMfaSetup = () => {
+    if (mfaMethod === "totp") {
+      if (totpCode.length !== 6) {
+        const message = "Enter the 6-digit code from your authenticator app.";
+        setTotpError(message);
+        toast({
+          title: "Verify Authenticator Code",
+          description: message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!totpSetup) {
+        toast({
+          title: "Setup Error",
+          description: "TOTP setup not initialized. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Verify the TOTP token
+      const isValid = verifyTotpToken(totpCode, totpSetup.secret.base32);
+      
+      if (!isValid) {
+        const message = "Invalid code. Please check your authenticator app and try again.";
+        setTotpError(message);
+        toast({
+          title: "Invalid Code",
+          description: message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Success - code is valid
+      setTotpCode("");
+      setTotpError("");
+      toast({
+        title: "MFA Setup Complete",
+        description: "Your account is now secure. Redirecting to login...",
+      });
+      return;
+    }
+
     if (mfaMethod === "email") {
       if (!otpSent) {
         const message = "Send the OTP to your email before completing setup.";
@@ -1143,7 +1218,11 @@ const RegisterForm = () => {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Manual Entry Key</Label>
-                <Input value="JBSWY3DPEHPK3PXP" readOnly className="font-mono text-center" />
+                <Input 
+                  value={totpSetup?.manualEntryKey || "Loading..."} 
+                  readOnly 
+                  className="font-mono text-center" 
+                />
                 <p className="text-xs text-[hsl(0,0%,31%)]">Use this if you can't scan the QR code from the badge.</p>
               </div>
 
@@ -1156,13 +1235,17 @@ const RegisterForm = () => {
                   pattern="\d*"
                   placeholder="000000"
                   maxLength={6}
-                  value={emailOtp}
-                  onChange={(e) => handleEmailOtpChange(e.target.value)}
+                  value={totpCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "");
+                    setTotpCode(value);
+                    if (totpError) setTotpError("");
+                  }}
                   className="text-center text-2xl tracking-widest"
-                  aria-invalid={Boolean(emailOtpError)}
+                  aria-invalid={Boolean(totpError)}
                 />
-                {emailOtpError ? (
-                  <p className="text-xs text-[hsl(0,84%,60%)]">{emailOtpError}</p>
+                {totpError ? (
+                  <p className="text-xs text-[hsl(0,84%,60%)]">{totpError}</p>
                 ) : (
                   <p className="text-xs text-[hsl(0,0%,24%)]">Enter the 6-digit code from your authenticator app.</p>
                 )}
@@ -1174,10 +1257,9 @@ const RegisterForm = () => {
                   Save these codes securely. Each can be used once if you lose access to your authenticator.
                 </p>
                 <div className="grid grid-cols-2 gap-2 mt-2 font-mono text-sm">
-                  <code className="bg-white p-2 rounded">ABC-123-XYZ</code>
-                  <code className="bg-white p-2 rounded">DEF-456-UVW</code>
-                  <code className="bg-white p-2 rounded">GHI-789-RST</code>
-                  <code className="bg-white p-2 rounded">JKL-012-OPQ</code>
+                  {backupCodes.slice(0, 10).map((code, index) => (
+                    <code key={index} className="bg-white p-2 rounded">{code}</code>
+                  ))}
                 </div>
               </div>
             </div>

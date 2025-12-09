@@ -6,6 +6,7 @@
  */
 
 import type { SendOtpRequest, VerifyOtpRequest, OtpResponse, AuthUser } from "@/lib/auth/types";
+import { verifyTotpToken } from "@/lib/auth/totpService";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -99,12 +100,32 @@ export const verifyMfa = async (params: {
   userId: string;
   method: "totp" | "email";
   code: string;
+  totpSecret?: string; // TOTP secret for verification
 }): Promise<{ success: boolean; token?: string; message: string }> => {
   console.log(`[AuthService] MFA verification via ${params.method}`);
   
   // Simulate network delay
   await new Promise((resolve) => setTimeout(resolve, 500));
 
+  if (params.method === "totp" && params.totpSecret) {
+    // Use real TOTP verification
+    const isValid = verifyTotpToken(params.code, params.totpSecret);
+    
+    if (isValid) {
+      return {
+        success: true,
+        token: `mock-jwt-token-${Date.now()}`,
+        message: "MFA verified",
+      };
+    }
+    
+    return {
+      success: false,
+      message: "Invalid verification code",
+    };
+  }
+
+  // For email OTP, accept any 6-digit code (mock)
   if (params.code.length === 6) {
     return {
       success: true,
