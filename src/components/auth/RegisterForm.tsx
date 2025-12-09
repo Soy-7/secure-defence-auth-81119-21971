@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useAuthPreview } from "./AuthLayout";
 import { setupTotp, verifyTotpToken, generateBackupCodes } from "@/lib/auth/totpService";
 import type { TotpSetup } from "@/lib/auth/totpService";
+import { register } from "@/services/authService";
 import "./register-preview.css";
 import "./auth-stepper.css";
 
@@ -25,6 +27,22 @@ const formatCountdown = (seconds: number) => {
   return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 };
 
+const getRoleBasedRedirect = (role: RoleKey): string => {
+  // Defence Personnel, Family Member/Dependent, Veteran/Retired Officer
+  if (role === "personnel" || role === "family" || role === "veteran") {
+    return "https://cyber-complaint-portal.vercel.app/";
+  }
+  // CERT Analyst - placeholder for now
+  if (role === "cert") {
+    return "/dashboard/cert"; // Will be updated later
+  }
+  // Admin / MoD Authority
+  if (role === "admin") {
+    return "https://cert-dashbord.vercel.app";
+  }
+  return "/dashboard";
+};
+
 const roleAvatarIconMap: Record<RoleKey, LucideIcon> = {
   personnel: Shield,
   family: Users,
@@ -34,6 +52,7 @@ const roleAvatarIconMap: Record<RoleKey, LucideIcon> = {
 };
 
 const RegisterForm = () => {
+  const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
@@ -698,7 +717,7 @@ const RegisterForm = () => {
     }, 2500);
   };
 
-  const handleCompleteMfaSetup = () => {
+  const handleCompleteMfaSetup = async () => {
     if (mfaMethod === "totp") {
       if (totpCode.length !== 6) {
         const message = "Enter the 6-digit code from your authenticator app.";
@@ -734,13 +753,64 @@ const RegisterForm = () => {
         return;
       }
 
-      // Success - code is valid
-      setTotpCode("");
-      setTotpError("");
-      toast({
-        title: "MFA Setup Complete",
-        description: "Your account is now secure. Redirecting to login...",
-      });
+      // Save user to database
+      try {
+        const result = await register({
+          fullName,
+          email,
+          mobile,
+          serviceId,
+          role: userType as string,
+          password: activationPassword,
+          mfaMethod: "totp",
+          totpSecret: totpSetup.secret.base32,
+          backupCodes,
+        });
+
+        if (!result.success) {
+          toast({
+            title: "Registration Failed",
+            description: result.message,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Save token and user data
+        if (result.token) {
+          localStorage.setItem("authToken", result.token);
+        }
+        if (result.user) {
+          localStorage.setItem("userData", JSON.stringify(result.user));
+        }
+
+        // Success
+        setTotpCode("");
+        setTotpError("");
+        toast({
+          title: "Registration Complete!",
+          description: "Redirecting to your dashboard...",
+        });
+
+        // Redirect to role-specific dashboard
+        if (userType) {
+          const redirectUrl = getRoleBasedRedirect(userType);
+          setTimeout(() => {
+            if (redirectUrl.startsWith("http")) {
+              window.location.href = redirectUrl;
+            } else {
+              navigate(redirectUrl);
+            }
+          }, 1500);
+        }
+      } catch (error) {
+        console.error("Registration error:", error);
+        toast({
+          title: "Registration Failed",
+          description: "An error occurred. Please try again.",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -777,17 +847,67 @@ const RegisterForm = () => {
         });
         return;
       }
-    }
 
-    clearOtpTimer();
-    setEmailOtp("");
-    setEmailOtpError("");
-    setOtpSent(false);
-    setOtpCountdown(0);
-    toast({
-      title: "MFA Setup Complete",
-      description: "Your account is now secure. Redirecting to login...",
-    });
+      // Save user to database with email MFA
+      try {
+        const result = await register({
+          fullName,
+          email,
+          mobile,
+          serviceId,
+          role: userType as string,
+          password: activationPassword,
+          mfaMethod: "email",
+        });
+
+        if (!result.success) {
+          toast({
+            title: "Registration Failed",
+            description: result.message,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Save token and user data
+        if (result.token) {
+          localStorage.setItem("authToken", result.token);
+        }
+        if (result.user) {
+          localStorage.setItem("userData", JSON.stringify(result.user));
+        }
+
+        clearOtpTimer();
+        setEmailOtp("");
+        setEmailOtpError("");
+        setOtpSent(false);
+        setOtpCountdown(0);
+        
+        toast({
+          title: "Registration Complete!",
+          description: "Redirecting to your dashboard...",
+        });
+
+        // Redirect to role-specific dashboard
+        if (userType) {
+          const redirectUrl = getRoleBasedRedirect(userType);
+          setTimeout(() => {
+            if (redirectUrl.startsWith("http")) {
+              window.location.href = redirectUrl;
+            } else {
+              navigate(redirectUrl);
+            }
+          }, 1500);
+        }
+      } catch (error) {
+        console.error("Registration error:", error);
+        toast({
+          title: "Registration Failed",
+          description: "An error occurred. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   const handleBackFromMfa = () => {

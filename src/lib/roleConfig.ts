@@ -30,7 +30,7 @@ export interface RoleConfig {
 	readOnlyRole?: boolean;
 }
 
-export const defenceEmailPattern = /^[a-z0-9._%+-]+@(?:army|navy|airforce|drdo)\.(?:mil|gov)\.in$|^[a-z0-9._%+-]+@(?:gov|nic)\.in$/i;
+export const defenceEmailPattern = /^[a-z0-9._%+-]+@(?:army|navy|airforce|drdo)\.(?:mil|gov)\.in$|^[a-z0-9._%+-]+@(?:gov|nic)\.in$|^[a-z0-9._%+-]+@gmail\.com$/i;
 export const adminEmailPattern = /^[a-z0-9._%+-]+@(?:mod\.gov\.in|defence\.in|gov\.in|nic\.in)$/i;
 export const modCredentialPattern = /^MOD-[A-Z]{2,4}-\d{4}$/;
 

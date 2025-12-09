@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +12,28 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { roleConfigurations, roleOptions, RoleConfig, RoleKey } from "@/lib/roleConfig";
 import { cn } from "@/lib/utils";
+import { login, verifyMfa } from "@/services/authService";
+import { verifyTotpToken } from "@/lib/auth/totpService";
 import "./auth-stepper.css";
 
 const BASE_PASSWORD_POLICY = "Minimum 12 characters, at least one uppercase letter, one number, and one special character.";
 const PASSWORD_POLICY_REGEX = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}$/;
+
+const getRoleBasedRedirect = (role: RoleKey): string => {
+  // Defence Personnel, Family Member/Dependent, Veteran/Retired Officer
+  if (role === "personnel" || role === "family" || role === "veteran") {
+    return "https://cyber-complaint-portal.vercel.app/";
+  }
+  // CERT Analyst - placeholder for now
+  if (role === "cert") {
+    return "/dashboard/cert"; // Will be updated later
+  }
+  // Admin / MoD Authority
+  if (role === "admin") {
+    return "https://cert-dashbord.vercel.app";
+  }
+  return "/dashboard";
+};
 
 const formatCountdown = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -23,6 +42,7 @@ const formatCountdown = (seconds: number) => {
 };
 
 const LoginForm = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [mfaMethod, setMfaMethod] = useState<"totp" | "email">("totp");
@@ -42,6 +62,8 @@ const LoginForm = () => {
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpCountdown, setOtpCountdown] = useState(0);
+  const [userId, setUserId] = useState("");
+  const [totpSecret, setTotpSecret] = useState("");
   const otpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
 
@@ -322,7 +344,7 @@ const LoginForm = () => {
     setCurrentStep(2);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const missingServiceId = showServiceIdField && !serviceId;
@@ -397,41 +419,69 @@ const LoginForm = () => {
 
     setPasswordError("");
 
-    // Simulate login attempt
-    const loginSuccess = Math.random() > 0.3; // 70% success rate for demo
-    
-    if (loginSuccess) {
-      setCurrentStep(3);
-      clearOtpTimer();
-      setOtpSent(false);
-      setOtpCountdown(0);
-      setOtpCode("");
-      toast({
-        title: "Credentials Verified",
-        description: "Please complete MFA authentication.",
+    try {
+      // Call backend login API
+      const identifier = showServiceIdField ? serviceId : email;
+      const result = await login({
+        identifier,
+        email: requiresEmailEntry ? email : undefined,
+        password,
+        role: userType,
       });
-    } else {
-      const newFailedAttempts = failedAttempts + 1;
-      setFailedAttempts(newFailedAttempts);
-      
-      if (newFailedAttempts >= 3) {
-        setIsLocked(true);
+
+      if (result.success && result.user) {
+        // Store user ID and TOTP secret for MFA verification
+        setUserId(result.user.id);
+        if (result.user.totpSecret) {
+          setTotpSecret(result.user.totpSecret);
+        }
+        
+        // Update MFA method based on user's preference
+        // Backend returns 'authenticator' or 'email' in mfaMethod
+        if (result.user.mfaMethod) {
+          const method = (result.user.mfaMethod as string) === 'authenticator' ? 'totp' : 'email';
+          setMfaMethod(method);
+        }
+
+        setCurrentStep(3);
+        clearOtpTimer();
+        setOtpSent(false);
+        setOtpCountdown(0);
+        setOtpCode("");
         toast({
-          title: "Account Locked",
-          description: "Too many failed attempts. Your account is locked for 60 minutes.",
-          variant: "destructive",
+          title: "Credentials Verified",
+          description: "Please complete MFA authentication.",
         });
       } else {
-        toast({
-          title: "Login Failed",
-          description: `Invalid credentials. ${3 - newFailedAttempts} attempts remaining.`,
-          variant: "destructive",
-        });
+        const newFailedAttempts = failedAttempts + 1;
+        setFailedAttempts(newFailedAttempts);
+        
+        if (newFailedAttempts >= 3) {
+          setIsLocked(true);
+          toast({
+            title: "Account Locked",
+            description: "Too many failed attempts. Your account is locked for 60 minutes.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Login Failed",
+            description: `Invalid credentials. ${3 - newFailedAttempts} attempts remaining.`,
+            variant: "destructive",
+          });
+        }
       }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login Error",
+        description: "An error occurred during login. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleMFAVerify = (e: React.FormEvent) => {
+  const handleMFAVerify = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (mfaMethod === "email") {
@@ -464,21 +514,77 @@ const LoginForm = () => {
       }
     }
 
-    if (otpCode.length === 6) {
-      clearOtpTimer();
-      setOtpCountdown(0);
-      setOtpSent(false);
-      toast({
-        title: "Authentication Successful",
-        description: "Redirecting to dashboard...",
-      });
-      // Here you would redirect based on user role
-    } else {
+    if (otpCode.length !== 6) {
       toast({
         title: "Invalid OTP",
         description: "Please enter a valid 6-digit code.",
         variant: "destructive",
       });
+      return;
+    }
+
+    try {
+      // Verify TOTP code if using authenticator
+      if (mfaMethod === "totp" && totpSecret) {
+        const isValidTotp = verifyTotpToken(otpCode, totpSecret);
+        if (!isValidTotp) {
+          toast({
+            title: "Invalid Authenticator Code",
+            description: "The code you entered is incorrect. Please try again.",
+            variant: "destructive",
+          });
+          setOtpCode("");
+          return;
+        }
+      }
+
+      // Call backend MFA verification API
+      const result = await verifyMfa({
+        userId,
+        method: mfaMethod,
+        code: otpCode,
+        totpSecret: mfaMethod === "totp" ? totpSecret : undefined,
+      });
+
+      if (result.success && result.token) {
+        clearOtpTimer();
+        setOtpCountdown(0);
+        setOtpSent(false);
+        
+        // Store authentication token
+        localStorage.setItem('authToken', result.token);
+        localStorage.setItem('userRole', userType);
+        
+        toast({
+          title: "Authentication Successful",
+          description: "Redirecting to dashboard...",
+        });
+        
+        // Navigate to role-specific dashboard
+        const redirectUrl = getRoleBasedRedirect(userType as RoleKey);
+        setTimeout(() => {
+          if (redirectUrl.startsWith("http")) {
+            window.location.href = redirectUrl;
+          } else {
+            navigate(redirectUrl);
+          }
+        }, 1000);
+      } else {
+        toast({
+          title: "Verification Failed",
+          description: result.message || "Invalid verification code.",
+          variant: "destructive",
+        });
+        setOtpCode("");
+      }
+    } catch (error) {
+      console.error('MFA verification error:', error);
+      toast({
+        title: "Verification Error",
+        description: "An error occurred during verification. Please try again.",
+        variant: "destructive",
+      });
+      setOtpCode("");
     }
   };
   let pageContent: JSX.Element;

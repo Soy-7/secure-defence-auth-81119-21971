@@ -1,14 +1,12 @@
 /**
  * Authentication Service
- * Handles API calls for OTP sending/verification
- * 
- * NOTE: These are mock implementations. Replace with actual API calls in production.
+ * Handles API calls for authentication with backend
  */
 
 import type { SendOtpRequest, VerifyOtpRequest, OtpResponse, AuthUser } from "@/lib/auth/types";
 import { verifyTotpToken } from "@/lib/auth/totpService";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 /**
  * Send OTP to email
@@ -65,32 +63,36 @@ export const login = async (credentials: {
   password: string;
   role: string;
 }): Promise<{ success: boolean; user?: AuthUser; message: string }> => {
-  console.log(`[AuthService] Login attempt for role: ${credentials.role}`);
-  
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 800));
-
-  // Mock 70% success rate for demo
-  const success = Math.random() > 0.3;
-
-  if (success) {
-    return {
-      success: true,
-      user: {
-        id: crypto.randomUUID(),
-        email: credentials.email || `${credentials.identifier}@defence.in`,
-        role: credentials.role,
-        mfaEnabled: true,
-        mfaMethod: "email",
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      message: "Login successful",
+      body: JSON.stringify(credentials),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data.message || 'Login failed',
+      };
+    }
+
+    return {
+      success: data.success,
+      user: data.user,
+      message: data.message,
+    };
+  } catch (error: any) {
+    console.error('[AuthService] Login error:', error);
+    return {
+      success: false,
+      message: error.message || 'Login failed',
     };
   }
-
-  return {
-    success: false,
-    message: "Invalid credentials",
-  };
 };
 
 /**
@@ -102,42 +104,53 @@ export const verifyMfa = async (params: {
   code: string;
   totpSecret?: string; // TOTP secret for verification
 }): Promise<{ success: boolean; token?: string; message: string }> => {
-  console.log(`[AuthService] MFA verification via ${params.method}`);
-  
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  try {
+    // For TOTP, verify locally first for quick feedback
+    if (params.method === "totp" && params.totpSecret) {
+      const isValid = verifyTotpToken(params.code, params.totpSecret);
+      
+      if (!isValid) {
+        return {
+          success: false,
+          message: "Invalid verification code",
+        };
+      }
+    }
 
-  if (params.method === "totp" && params.totpSecret) {
-    // Use real TOTP verification
-    const isValid = verifyTotpToken(params.code, params.totpSecret);
-    
-    if (isValid) {
+    // Call backend to complete MFA and get JWT token
+    const response = await fetch(`${API_BASE_URL}/auth/verify-mfa`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: params.userId,
+        code: params.code,
+        method: params.method,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
       return {
-        success: true,
-        token: `mock-jwt-token-${Date.now()}`,
-        message: "MFA verified",
+        success: false,
+        message: data.message || 'MFA verification failed',
       };
     }
-    
+
+    return {
+      success: data.success,
+      token: data.token,
+      message: data.message,
+    };
+  } catch (error: any) {
+    console.error('[AuthService] MFA verification error:', error);
     return {
       success: false,
-      message: "Invalid verification code",
+      message: error.message || 'MFA verification failed',
     };
   }
-
-  // For email OTP, accept any 6-digit code (mock)
-  if (params.code.length === 6) {
-    return {
-      success: true,
-      token: `mock-jwt-token-${Date.now()}`,
-      message: "MFA verified",
-    };
-  }
-
-  return {
-    success: false,
-    message: "Invalid verification code",
-  };
 };
 
 /**
@@ -151,16 +164,32 @@ export const register = async (userData: {
   role: string;
   password: string;
   mfaMethod: "totp" | "email";
-}): Promise<{ success: boolean; message: string }> => {
-  console.log(`[AuthService] Registration for ${userData.email} as ${userData.role}`);
-  
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  totpSecret?: string;
+  backupCodes?: string[];
+}): Promise<{ success: boolean; message: string; token?: string; user?: any }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    });
 
-  return {
-    success: true,
-    message: "Registration submitted for verification",
-  };
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Registration failed');
+    }
+
+    return data;
+  } catch (error: any) {
+    console.error('[AuthService] Registration error:', error);
+    return {
+      success: false,
+      message: error.message || 'Registration failed',
+    };
+  }
 };
 
 export default {

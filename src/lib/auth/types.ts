@@ -30,4 +30,5 @@ export interface AuthUser {
   role: string;
   mfaEnabled: boolean;
   mfaMethod?: MfaMethod;
+  totpSecret?: string; // TOTP secret for verification
 }
